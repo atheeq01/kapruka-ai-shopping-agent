@@ -7,7 +7,15 @@ from google.genai import types
 from mcp.client.session import ClientSession
 from app.mcp.client import mcp_client
 from app.prompts.system import KAPRUKA_AGENT_PROMPT
-from app.services.products import parse_search_markdown, enrich_with_images, parse_product_detail, parse_order
+from app.services.products import (
+    parse_search_markdown,
+    parse_search_json,
+    enrich_with_images,
+    parse_product_detail,
+    parse_product_detail_json,
+    parse_order,
+    parse_order_result,
+)
 from app.services.language import detect_language, language_directive
 from app.core.config import settings
 
@@ -138,6 +146,31 @@ def _flatten_args(args: dict) -> dict:
     elif isinstance(params, dict):
         flat.update(params)
     return flat
+
+
+# Tools whose results we parse as structured JSON. We force the JSON response
+# format regardless of what the model requested, so the parsers always get the
+# rich, clean payload (descriptions, ratings, image galleries, variants).
+_JSON_RESULT_TOOLS = {
+    "kapruka_search_products",
+    "kapruka_get_product",
+    "kapruka_create_order",
+}
+
+
+def _force_json_format(name: str, args: dict) -> dict:
+    """Return a copy of args with response_format='json' for JSON-result tools."""
+    if name not in _JSON_RESULT_TOOLS:
+        return args
+    args = dict(args)
+    params = args.get("params")
+    if isinstance(params, dict):
+        params = dict(params)
+        params["response_format"] = "json"
+        args["params"] = params
+    else:
+        args["response_format"] = "json"
+    return args
 
 
 def _tool_label(name: str, args: dict) -> str:
@@ -335,7 +368,8 @@ async def process_chat(
 
             try:
                 session = await _get_mcp_session()
-                result = await session.call_tool(fc.name, arguments=args)
+                call_args = _force_json_format(fc.name, args)
+                result = await session.call_tool(fc.name, arguments=call_args)
                 output = _extract_mcp_text(result)
             except Exception as e:
                 output = f"Tool error: {e}"
@@ -346,22 +380,39 @@ async def process_chat(
             # ── Rich structured events per tool ────────────────────────────────
             if fc.name == "kapruka_search_products":
                 try:
-                    parsed = parse_search_markdown(output)
+                    # JSON is the rich path (clean CDN images, descriptions, stock).
+                    parsed = parse_search_json(output)
                     if parsed:
-                        parsed = await enrich_with_images(parsed)
                         yield _sse({"type": "products", "items": parsed})
+                    else:
+                        # Defensive fallback if the server returned Markdown anyway.
+                        md = parse_search_markdown(output)
+                        if md:
+                            md = await enrich_with_images(md)
+                            yield _sse({"type": "products", "items": md})
                 except Exception as e:
                     print(f"[agent] search parse failed: {e}")
 
             elif fc.name == "kapruka_get_product":
                 try:
-                    detail = parse_product_detail(output)
+                    # A specific product (with its size variants) gets its OWN
+                    # prominent detail card, separate from any search-results grid.
+                    detail = parse_product_detail_json(output) or parse_product_detail(output)
                     if detail:
-                        # A specific product (with its size variants) gets its OWN
-                        # prominent detail card, separate from any search-results grid.
                         yield _sse({"type": "product_detail", "item": detail})
                 except Exception as e:
                     print(f"[agent] product detail parse failed: {e}")
+
+            elif fc.name == "kapruka_create_order":
+                try:
+                    # Combine the submitted order (recipient/delivery/sender/message/
+                    # icing) with the checkout result so the confirmation card shows
+                    # EVERY detail — not just the totals the result echoes back.
+                    order = parse_order_result(_flatten_args(args), output)
+                    if order:
+                        yield _sse({"type": "order_confirmation", "order": order})
+                except Exception as e:
+                    print(f"[agent] order confirmation parse failed: {e}")
 
             elif fc.name == "kapruka_track_order":
                 try:

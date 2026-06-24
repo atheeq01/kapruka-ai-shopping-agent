@@ -16,9 +16,6 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Warm the (shared, static) MCP tool cache so the first chat request is fast.
-    # Per-request MCP sessions are opened on demand inside the chat handler, so we
-    # deliberately do NOT hold a long-lived shared session here.
     try:
         await get_gemini_tools()
     except Exception as e:

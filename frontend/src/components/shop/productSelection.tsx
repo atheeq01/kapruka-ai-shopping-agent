@@ -1,0 +1,149 @@
+import React, { useMemo, useState } from 'react';
+import { Minus, Plus } from 'lucide-react';
+import { useAppStore } from '../../store/cartStore';
+import { cn } from '../../lib/utils';
+import type { NormalizedProduct, ProductVariant } from '../../lib/normalizeProduct';
+
+/**
+ * Shared selection logic. Products that ship in multiple sizes/weights (cakes:
+ * 1KG / 2KG / 4KG) expose `variants`; we let the customer pick a size and a
+ * quantity before adding, and reflect the chosen variant's price. Simple
+ * products keep the original one-tap select/deselect behaviour.
+ */
+export function useProductSelection(product: NormalizedProduct) {
+  const cart = useAppStore((s) => s.cart);
+  const addToCart = useAppStore((s) => s.addToCart);
+  const removeFromCart = useAppStore((s) => s.removeFromCart);
+
+  const variants = product.variants ?? [];
+  const hasVariants = variants.length > 0;
+
+  const firstAvailable = useMemo(
+    () => variants.find((v) => v.inStock) ?? variants[0],
+    [variants],
+  );
+  const [size, setSize] = useState<string | undefined>(firstAvailable?.label);
+  const [qty, setQty] = useState(1);
+  // Optional iced-on greeting for cakes (becomes the cart item's icing_text).
+  const [icing, setIcing] = useState('');
+
+  const activeVariant: ProductVariant | undefined = hasVariants
+    ? variants.find((v) => v.label === size) ?? firstAvailable
+    : undefined;
+
+  const price = activeVariant?.price ?? product.price;
+  const inStock = activeVariant ? activeVariant.inStock : product.inStock;
+  const inCart = cart.find((c) => c.product_id === product.id);
+  const isSelected = Boolean(inCart);
+
+  const trimmedIcing = icing.trim();
+
+  const add = () => {
+    // Always replace so the cart reflects the latest size/quantity/icing choice.
+    removeFromCart(product.id);
+    addToCart({
+      product_id: product.id,
+      quantity: hasVariants ? qty : 1,
+      name: activeVariant ? `${product.name} (${activeVariant.label})` : product.name,
+      price,
+      image: product.image,
+      ...(activeVariant && { size: activeVariant.label }),
+      ...(product.isCake && trimmedIcing && { icing_text: trimmedIcing }),
+    });
+  };
+
+  const toggleSimple = () => {
+    if (isSelected) removeFromCart(product.id);
+    else add();
+  };
+
+  return {
+    hasVariants,
+    variants,
+    size,
+    setSize,
+    qty,
+    setQty,
+    icing,
+    setIcing,
+    price,
+    inStock,
+    isSelected,
+    inCart,
+    add,
+    toggleSimple,
+  };
+}
+
+/** Compact, optional icing-greeting input shown on cake cards. */
+export const IcingInput: React.FC<{ value: string; onChange: (v: string) => void }> = ({
+  value,
+  onChange,
+}) => (
+  <div>
+    <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-gray-400">
+      Icing greeting <span className="lowercase tracking-normal text-gray-300">· optional</span>
+    </p>
+    <input
+      type="text"
+      value={value}
+      maxLength={120}
+      onChange={(e) => onChange(e.target.value)}
+      onClick={(e) => e.stopPropagation()}
+      placeholder='e.g. "Happy Birthday Amma"'
+      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none transition-colors focus:border-violet-400 focus:ring-2 focus:ring-violet-200"
+    />
+  </div>
+);
+
+export const SizePicker: React.FC<{
+  variants: ProductVariant[];
+  size?: string;
+  onSelect: (label: string) => void;
+}> = ({ variants, size, onSelect }) => (
+  <div className="flex flex-wrap gap-1.5">
+    {variants.map((v) => (
+      <button
+        key={v.label}
+        type="button"
+        disabled={!v.inStock}
+        onClick={() => onSelect(v.label)}
+        className={cn(
+          'rounded-md border px-2.5 py-1 text-xs font-semibold transition-all active:scale-95',
+          'disabled:cursor-not-allowed disabled:opacity-40',
+          size === v.label
+            ? 'border-violet-600 bg-violet-600 text-white'
+            : 'border-gray-200 text-gray-600 hover:border-violet-400 hover:text-violet-600',
+        )}
+      >
+        {v.label}
+      </button>
+    ))}
+  </div>
+);
+
+export const QtyStepper: React.FC<{ qty: number; setQty: (n: number) => void }> = ({
+  qty,
+  setQty,
+}) => (
+  <div className="flex items-center rounded-lg border border-gray-200">
+    <button
+      type="button"
+      onClick={() => setQty(Math.max(1, qty - 1))}
+      disabled={qty <= 1}
+      className="px-2 py-1.5 text-gray-500 transition-colors hover:text-violet-600 disabled:opacity-30"
+      aria-label="Decrease quantity"
+    >
+      <Minus size={13} />
+    </button>
+    <span className="min-w-[28px] text-center text-sm font-semibold text-kapruka-dark">{qty}</span>
+    <button
+      type="button"
+      onClick={() => setQty(Math.min(99, qty + 1))}
+      className="px-2 py-1.5 text-gray-500 transition-colors hover:text-violet-600"
+      aria-label="Increase quantity"
+    >
+      <Plus size={13} />
+    </button>
+  </div>
+);

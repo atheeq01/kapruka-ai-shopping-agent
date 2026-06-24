@@ -1,14 +1,21 @@
 """
 Parse and enrich MCP tool results into structured product/order dicts.
 
-kapruka_search_products  → parse_search_markdown  → list[dict]
-kapruka_get_product      → parse_product_detail   → dict | None
-kapruka_track_order      → parse_order            → dict | None
+The MCP server can return either Markdown (human-readable) or JSON (structured).
+We ask it for JSON (see agent.py) because it carries far richer, cleaner data —
+descriptions, ratings, stock levels, full image galleries, variants and category —
+none of which survive the lossy Markdown scrape. Markdown parsers are kept as a
+defensive fallback for the rare case the server hands back Markdown anyway.
+
+kapruka_search_products  → parse_search_json / parse_search_markdown  → list[dict]
+kapruka_get_product      → parse_product_detail (json|markdown)        → dict | None
+kapruka_create_order     → parse_order_result                         → dict | None
+kapruka_track_order      → parse_order                                → dict | None
 """
 import asyncio
 import json
 import re
-from typing import Optional
+from typing import Optional, Any
 
 import httpx
 
@@ -32,7 +39,291 @@ _INLINE_IMG_RE = re.compile(
 )
 
 
-# ── Search products parsing ────────────────────────────────────────────────────
+# ── JSON parsing (preferred path) ──────────────────────────────────────────────
+# The MCP server hands us structured JSON when asked. It is dramatically richer
+# than the Markdown view, so these are the primary parsers.
+
+# Mojibake the upstream catalogue occasionally emits (UTF-8 mis-decoded as latin-1).
+_MOJIBAKE = {
+    "â??": "'", "â?T": "'", "â?": "”", "â?": "“",
+    "â?": "—", "â?": "—", "â?¦": "…", "Ã©": "é", "Â": "",
+}
+
+
+def _clean_text(text: Any) -> str:
+    """Fix common mojibake and collapse runaway whitespace from the catalogue feed."""
+    if not isinstance(text, str):
+        return ""
+    for bad, good in _MOJIBAKE.items():
+        text = text.replace(bad, good)
+    # Any remaining stray replacement artefacts → a neutral apostrophe/space.
+    text = text.replace("â??", "'").replace("�", "")
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _clean_description(text: Any, product_id: str = "", name: str = "") -> str:
+    """
+    Tidy a product description: fix encoding, drop the leading SKU + weight/vendor
+    boilerplate the feed prepends, and normalise whitespace into readable prose.
+    """
+    desc = _clean_text(text)
+    if not desc:
+        return ""
+    # Strip a leading bare SKU token (e.g. "CAKE00KA001832 ...").
+    if product_id:
+        desc = re.sub(rf"^{re.escape(product_id)}\b[:\s]*", "", desc, flags=re.I)
+    desc = re.sub(r"^[A-Z0-9_]{6,}\b[:\s]*", "", desc)
+    # Strip a leading "Weight: 0.94 Lbs (0.42 KG)" preamble.
+    desc = re.sub(r"^Weight:\s*[\d.]+\s*Lbs\s*\([^)]*\)\s*", "", desc, flags=re.I)
+    return desc.strip()
+
+
+def _price_amount(price: Any) -> float:
+    """Accept either a {'amount': n} object or a bare number."""
+    if isinstance(price, dict):
+        return float(price.get("amount") or 0)
+    try:
+        return float(price)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+# Category slugs / type hints that drive product-specific UI affordances.
+_CAKE_HINTS = ("cake", "cheesecake", "gateau")
+_PERSONALIZE_HINTS = (
+    "personalized", "personalised", "personalized-gifts", "customized",
+    "customised", "custom-gift", "specialgifts",
+)
+# Phrases in a description that mean the buyer must supply a photo / custom text,
+# which is only collectable on the Kapruka checkout page (not via the agent).
+_PHOTO_RE = re.compile(
+    r"\b(add your (?:own )?(?:photo|picture|image)|upload (?:a |your )?photo"
+    r"|favou?rite photo|your photo here|add your (?:own )?message and photo)\b",
+    re.I,
+)
+
+
+def _detect_flags(name: str, category: str, ptype: str, description: str) -> dict:
+    """Derive UI hints: cakes (icing greeting) and personalised/photo gifts."""
+    haystack = " ".join((name, category, ptype, description)).lower()
+    is_cake = any(h in haystack for h in _CAKE_HINTS)
+    personalize_cat = any(h in (category + " " + ptype).lower() for h in _PERSONALIZE_HINTS)
+    needs_photo = bool(_PHOTO_RE.search(description or ""))
+    needs_personalization = needs_photo or (personalize_cat and "card" in haystack)
+    flags: dict = {}
+    if is_cake:
+        flags["isCake"] = True
+    if needs_personalization:
+        flags["needsPersonalization"] = True
+        flags["personalizationNote"] = (
+            "This is a personalised item — add your photo and custom message on the "
+            "Kapruka product page before paying. (It can't be uploaded here in chat.)"
+        )
+    return flags
+
+
+def _product_from_json(obj: dict) -> Optional[dict]:
+    """Normalise one product object (search result or full detail) into our shape."""
+    if not isinstance(obj, dict):
+        return None
+    pid = str(obj.get("id") or obj.get("product_id") or "").strip()
+    name = _clean_text(obj.get("name") or obj.get("title"))
+    if not name:
+        return None
+
+    category_obj = obj.get("category")
+    category = ""
+    if isinstance(category_obj, dict):
+        category = _clean_text(category_obj.get("name"))
+    elif isinstance(category_obj, str):
+        category = _clean_text(category_obj)
+
+    attributes = obj.get("attributes") if isinstance(obj.get("attributes"), dict) else {}
+    ptype = str(attributes.get("subtype") or attributes.get("type") or "")
+
+    description = _clean_description(obj.get("description"), pid, name)
+    summary = _clean_text(obj.get("summary"))
+
+    # Images: detail uses `images` (list), search uses `image_url` (single CDN URL).
+    images = [str(u) for u in obj.get("images", []) if u] if isinstance(obj.get("images"), list) else []
+    if not images and obj.get("image_url"):
+        images = [str(obj["image_url"])]
+
+    # Variants — only surface as real choices when there's more than the lone default.
+    variants: list[dict] = []
+    raw_variants = obj.get("variants") if isinstance(obj.get("variants"), list) else []
+    for v in raw_variants:
+        if not isinstance(v, dict):
+            continue
+        attrs = v.get("attributes") if isinstance(v.get("attributes"), dict) else {}
+        weight = attrs.get("weight")
+        label = _clean_text(v.get("name"))
+        if label.lower() in ("", "default"):
+            label = f"{weight} KG" if weight and str(weight) not in ("0", "0.0") else ""
+        variants.append({
+            "label": label,
+            "price": _price_amount(v.get("price")),
+            "inStock": bool(v.get("in_stock", True)),
+            "weight": str(weight) if weight else None,
+        })
+    meaningful_variants = [v for v in variants if v["label"]]
+    if len(meaningful_variants) < 2:
+        meaningful_variants = []
+
+    weight_attr = attributes.get("weight")
+    weight = None
+    if weight_attr and str(weight_attr) not in ("0", "0.0"):
+        weight = f"{weight_attr} KG"
+
+    product: dict = {
+        "id": pid or "product-detail",
+        "name": name,
+        "price": _price_amount(obj.get("price")),
+        "currency": (obj.get("price") or {}).get("currency", "LKR") if isinstance(obj.get("price"), dict) else "LKR",
+        "inStock": bool(obj.get("in_stock", True)),
+        "category": category or "Product",
+        "url": obj.get("url"),
+    }
+    compare_at = _price_amount(obj.get("compare_at_price")) if obj.get("compare_at_price") else 0
+    if compare_at and compare_at > product["price"]:
+        product["compareAtPrice"] = compare_at
+    if obj.get("stock_level"):
+        product["stockLevel"] = str(obj["stock_level"])
+    if images:
+        product["image"] = images[0]
+        if len(images) > 1:
+            product["images"] = images
+    if description:
+        product["description"] = description
+    if summary:
+        product["summary"] = summary
+    if meaningful_variants:
+        product["variants"] = meaningful_variants
+    if weight:
+        product["weight"] = weight
+    if obj.get("rating") is not None:
+        try:
+            product["rating"] = float(obj["rating"])
+        except (TypeError, ValueError):
+            pass
+    if isinstance(attributes.get("vendor"), str):
+        product["vendor"] = _clean_text(attributes["vendor"])
+
+    product.update(_detect_flags(name, category, ptype, description))
+    return product
+
+
+def _loads(text: str) -> Optional[Any]:
+    """Best-effort JSON load; tolerate code fences or leading prose."""
+    if not isinstance(text, str):
+        return None
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        text = re.sub(r"^json", "", text, flags=re.I).strip()
+    try:
+        return json.loads(text)
+    except Exception:
+        m = re.search(r"[\[{].*[\]}]", text, re.S)
+        if m:
+            try:
+                return json.loads(m.group(0))
+            except Exception:
+                return None
+    return None
+
+
+def parse_search_json(text: str) -> list[dict]:
+    """Parse kapruka_search_products JSON into normalized product dicts. [] on miss."""
+    data = _loads(text)
+    if data is None:
+        return []
+    results = data.get("results") if isinstance(data, dict) else data
+    if not isinstance(results, list):
+        return []
+    out = [_product_from_json(r) for r in results]
+    return [p for p in out if p]
+
+
+def parse_product_detail_json(text: str) -> Optional[dict]:
+    """Parse kapruka_get_product JSON into a single normalized product dict."""
+    data = _loads(text)
+    if not isinstance(data, dict):
+        return None
+    # Some servers wrap the product under a key; unwrap the obvious cases.
+    if "name" not in data and isinstance(data.get("product"), dict):
+        data = data["product"]
+    return _product_from_json(data)
+
+
+def parse_order_result(args: dict, output: str) -> Optional[dict]:
+    """
+    Build a complete order-confirmation dict for the UI.
+
+    The create_order *result* only carries pricing + the checkout link, so we merge
+    it with the *arguments* the agent submitted (recipient, delivery, sender, gift
+    message, per-item icing) — guaranteeing the confirmation card shows every detail,
+    including the special instructions / personal message / anonymity that were
+    previously dropped.
+    """
+    result = _loads(output)
+    if not isinstance(result, dict):
+        result = {}
+
+    cart = args.get("cart") or []
+    items = []
+    for it in cart if isinstance(cart, list) else []:
+        if not isinstance(it, dict):
+            continue
+        items.append({
+            "product_id": it.get("product_id"),
+            "name": _clean_text(it.get("name")) or it.get("product_id"),
+            "quantity": it.get("quantity", 1),
+            "icing_text": _clean_text(it.get("icing_text")) or None,
+        })
+
+    recipient = args.get("recipient") if isinstance(args.get("recipient"), dict) else {}
+    delivery = args.get("delivery") if isinstance(args.get("delivery"), dict) else {}
+    sender = args.get("sender") if isinstance(args.get("sender"), dict) else {}
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+
+    order: dict = {
+        "items": items,
+        "recipient": {
+            "name": _clean_text(recipient.get("name")),
+            "phone": recipient.get("phone"),
+        },
+        "delivery": {
+            "address": _clean_text(delivery.get("address")),
+            "city": _clean_text(delivery.get("city")),
+            "location_type": delivery.get("location_type") or "house",
+            "date": delivery.get("date"),
+            "instructions": _clean_text(delivery.get("instructions")) or None,
+        },
+        "sender": {
+            "name": _clean_text(sender.get("name")),
+            "anonymous": bool(sender.get("anonymous", False)),
+        },
+        "gift_message": _clean_text(args.get("gift_message")) or None,
+        "checkout_url": result.get("checkout_url"),
+        "order_ref": result.get("order_ref"),
+        "expires_at": result.get("expires_at"),
+        "currency": summary.get("currency", "LKR"),
+    }
+    if summary:
+        order["totals"] = {
+            "items_total": summary.get("items_total"),
+            "delivery_fee": summary.get("delivery_fee"),
+            "addons_total": summary.get("addons_total"),
+            "grand_total": summary.get("grand_total"),
+        }
+    # Only emit a card when we actually produced a checkout link or have line items.
+    if not order["checkout_url"] and not items:
+        return None
+    return order
+
+
+# ── Search products parsing (Markdown fallback) ────────────────────────────────
 
 def _category_from(md: str) -> Optional[str]:
     m = _CATEGORY_RE.search(md)
