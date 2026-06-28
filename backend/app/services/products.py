@@ -323,6 +323,135 @@ def parse_order_result(args: dict, output: str) -> Optional[dict]:
     return order
 
 
+# ── Post-retrieval relevance / consistency filter ──────────────────────────────
+# The upstream catalogue search is noisy: a "flowers" query can return cakes, and a
+# "perfume for her" query can return men's fragrances. We must NEVER render a results
+# grid whose contents contradict what the user asked for (it instantly kills trust),
+# so we enforce category- and gender-consistency here, before the products reach the
+# UI and before the model describes them.
+
+# Each family maps to the keyword fragments that identify it in a product's
+# name / category / description AND in the user's query.
+_CATEGORY_FAMILIES: dict[str, tuple[str, ...]] = {
+    "flowers":     ("flower", "bouquet", "rose", "bloom", "floral", "orchid",
+                    "carnation", "lily", "anthurium", "petal", "gerbera", "tulip"),
+    "cake":        ("cake", "gateau", "gâteau", "cheesecake", "cupcake", "brownie",
+                    "pastry", "gateaux", "torte", "muffin"),
+    "fragrance":   ("perfume", "fragrance", "cologne", "eau de", " edt", " edp",
+                    "parfum", "scent", "deodorant", "body spray", "body mist",
+                    "aftershave"),
+    "chocolate":   ("chocolate", "choco", "praline", "truffle", "ferrero"),
+    "watch":       ("watch", "wristwatch", "timepiece"),
+    "jewellery":   ("jewel", "necklace", "earring", "bracelet", "pendant",
+                    "bangle", "brooch"),
+    "fruit":       ("fruit", "fruit basket"),
+    "hamper":      ("hamper", "gift basket", "gift hamper"),
+    "wine":        ("wine", "whisky", "whiskey", "liquor", "vodka", "brandy",
+                    "champagne", "spirits"),
+    "toys":        ("toy", "teddy", "soft toy", " doll", "plush"),
+    "plant":       ("plant", "bonsai", "succulent", "sapling", "potted"),
+    "card":        ("greeting card", "greeting-card"),
+    "electronics": ("phone", "laptop", "headphone", "earbud", "speaker", "tablet"),
+}
+
+# Gendered recipient cues in the user's query (matched as whole words). Note "men"
+# is a substring of "women", so all matching is whole-word (space-padded).
+_QUERY_FEMALE = (
+    "her", "she", "women", "womens", "woman", "ladies", "lady", "girl",
+    "girlfriend", "gf", "wife", "mom", "mum", "mummy", "mother", "amma", "ammi",
+    "sister", "daughter", "aunty", "auntie", "akka", "nangi", "female", "feminine",
+    "femme", "wifey", "fiancee",
+)
+_QUERY_MALE = (
+    "him", "his", "men", "mens", "man", "gents", "gent", "guy", "boy",
+    "boyfriend", "bf", "husband", "hubby", "dad", "daddy", "father", "thaaththa",
+    "thaththa", "appa", "brother", "son", "male", "masculine", "homme", "aiya",
+    "ayya", "malli", "fiance", "gentleman",
+)
+
+# Gender markers as they appear in a PRODUCT's name/category/description.
+_PROD_MALE = (
+    " for him", "for men", "men's", "mens ", " gents", "gentlemen", "homme",
+    "pour homme", " male", "masculine", "aftershave", "for boys",
+)
+_PROD_FEMALE = (
+    " for her", "for women", "women's", "womens ", " ladies", "femme",
+    "pour femme", " female", "feminine", "for girls", "for ladies",
+)
+
+
+def _families_in(text: str) -> set[str]:
+    t = (text or "").lower()
+    return {fam for fam, kws in _CATEGORY_FAMILIES.items() if any(k in t for k in kws)}
+
+
+def _gender_from_query(query: str) -> Optional[str]:
+    # Pad with spaces and reduce to word tokens so "women" never trips the "men" cue.
+    ql = " " + re.sub(r"[^a-z]+", " ", (query or "").lower()).strip() + " "
+    fem = any(f" {w} " in ql for w in _QUERY_FEMALE)
+    masc = any(f" {w} " in ql for w in _QUERY_MALE)
+    if fem and not masc:
+        return "female"
+    if masc and not fem:
+        return "male"
+    return None
+
+
+def _gender_from_product(text: str) -> Optional[str]:
+    t = " " + (text or "").lower() + " "
+    masc = any(s in t for s in _PROD_MALE)
+    fem = any(s in t for s in _PROD_FEMALE)
+    if masc and not fem:
+        return "male"
+    if fem and not masc:
+        return "female"
+    return None
+
+
+def filter_search_results(query: str, products: list[dict]) -> tuple[list[dict], list[str]]:
+    """
+    Enforce category + gender consistency on a search result set.
+
+    Returns ``(kept, dropped_names)``. A product is dropped only on a genuine
+    CONTRADICTION — it clearly belongs to a category the user didn't ask for, or
+    its gender is the opposite of an explicitly gendered request. Products we
+    can't classify are kept (under-filtering a generic gift is fine; rendering a
+    cake under a "Flowers" header is not).
+    """
+    if not products:
+        return [], []
+
+    query_families = _families_in(query)
+    query_gender = _gender_from_query(query)
+    if not query_families and not query_gender:
+        return list(products), []  # nothing to enforce
+
+    kept: list[dict] = []
+    dropped: list[str] = []
+    for p in products:
+        blob = " ".join(str(p.get(k, "")) for k in ("name", "category", "description", "summary"))
+
+        # Category contradiction: the product has a clear family, none of which the
+        # user asked for. (Unclassifiable products fall through and are kept.)
+        if query_families:
+            prod_families = _families_in(blob)
+            if prod_families and not (prod_families & query_families):
+                dropped.append(p.get("name", "item"))
+                continue
+
+        # Gender contradiction: explicit "for her"/"for him" request vs an
+        # oppositely-gendered product.
+        if query_gender:
+            prod_gender = _gender_from_product(blob)
+            if prod_gender and prod_gender != query_gender:
+                dropped.append(p.get("name", "item"))
+                continue
+
+        kept.append(p)
+
+    return kept, dropped
+
+
 # ── Search products parsing (Markdown fallback) ────────────────────────────────
 
 def _category_from(md: str) -> Optional[str]:

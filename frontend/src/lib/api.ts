@@ -23,6 +23,29 @@ const FALLBACK_CATEGORIES: Category[] = [
   { name: 'Stationery',     emoji: '📝' },
 ];
 
+export interface GiftMessageContext {
+  recipient_name?: string;
+  sender_name?: string;
+  occasion?: string;
+  relationship?: string;
+  items?: string[];
+  language?: string;
+  anonymous?: boolean;
+}
+
+/** Ask the agent to draft a heartfelt gift-card message. Throws on failure. */
+export async function writeGiftMessage(ctx: GiftMessageContext): Promise<string> {
+  const res = await fetch(`${API_BASE}/api/gift-message`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(ctx),
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return String(data.message ?? '').trim();
+}
+
 export async function fetchCategories(): Promise<Category[]> {
   try {
     const res = await fetch(`${API_BASE}/api/categories`, {

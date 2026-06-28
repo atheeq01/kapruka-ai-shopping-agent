@@ -47,7 +47,7 @@ export interface Conversation {
   updatedAt: number;
 }
 
-export type LanguagePreference = 'EN' | 'SI' | 'TA';
+export type LanguagePreference = 'AUTO' | 'EN' | 'SI' | 'TA';
 
 interface AppState {
   cart: CartItem[];
@@ -80,7 +80,7 @@ export const useAppStore = create<AppState>()(
       cart: [],
       conversations: {},
       conversationOrder: [],
-      languagePreference: 'EN',
+      languagePreference: 'AUTO',
 
       addToCart: (item) =>
         set((state) => {
@@ -175,17 +175,19 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'kapruka-agent-storage',
-      version: 2,
-      // v1 stored a flat `chatHistory` array. v2 moves to multi-conversation.
-      // We keep the cart (shape is unchanged) and reset chat history cleanly.
+      version: 3,
+      // v1 stored a flat `chatHistory` array. v2 moved to multi-conversation.
+      // v3 does a one-time reset of the conversation list to clear leftover test
+      // chats ("hello", "hwllo", duplicates) so the demo opens clean. The cart is
+      // preserved in every case (its shape is unchanged).
       migrate: (persistedState, version) => {
-        if (version < 2) {
-          const old = persistedState as Partial<{ cart: CartItem[] }> | undefined;
+        const old = persistedState as Partial<{ cart: CartItem[] }> | undefined;
+        if (version < 3) {
           return {
             cart: old?.cart ?? [],
             conversations: {},
             conversationOrder: [],
-            languagePreference: 'EN',
+            languagePreference: 'AUTO',
           } as unknown as AppState;
         }
         return persistedState as AppState;

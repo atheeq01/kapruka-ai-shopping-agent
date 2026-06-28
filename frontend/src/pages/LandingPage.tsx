@@ -7,12 +7,22 @@ import { CartPanel } from '../components/layout/CartPanel';
 import { PromptInput } from '../components/chat/PromptInput';
 import { useAppStore } from '../store/cartStore';
 import { sendAgentMessage, sendVoiceMessage } from '../lib/agentStream';
+import { LanguageToggle } from '../components/ui/LanguageToggle';
 
 const QUICK_ACTIONS = [
   { label: 'Flowers for her', icon: '💐' },
   { label: 'Birthday Cakes',  icon: '🎂' },
   { label: 'Gift Ideas',      icon: '🎁' },
   { label: 'Fast Delivery',   icon: '🚚' },
+];
+
+// Sinhala example prompts — shown alongside the English chips so the app's
+// Sinhala fluency is obvious within seconds of opening it. Each sends a real
+// query through the same agent pipeline.
+const SINHALA_ACTIONS = [
+  { label: 'අම්මාට මල් කලඹක්', icon: '🌸', send: 'අම්මාට ලස්සන මල් කලඹක් ඕනේ' },
+  { label: 'උපන්දිනෙට කේක් 3000ට අඩුවෙන්', icon: '🎂', send: 'උපන්දිනයකට කේක් එකක් ඕනේ, රුපියල් 3000ට අඩුවෙන්' },
+  { label: 'පෙම්වතියට තෑග්ගක්', icon: '💝', send: 'මගේ පෙම්වතියට ලස්සන තෑග්ගක් ඕනේ 5000ට අඩුවෙන්' },
 ];
 
 /** Large animated K hero mark */
@@ -94,7 +104,15 @@ export const LandingPage: React.FC = () => {
       {/* Main content */}
       <div className="flex-1 flex flex-col h-full overflow-hidden relative z-10 min-w-0">
         {/* Header */}
-        <header className="flex items-center justify-end px-6 md:px-10 py-4">
+        <header className="flex items-center justify-end gap-3 px-6 md:px-10 py-4">
+          {/* Language toggle (Sinhala visible up front) */}
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <LanguageToggle />
+          </motion.div>
           {/* Cart button */}
           <motion.button
             initial={{ opacity: 0, x: 20 }}
@@ -159,6 +177,29 @@ export const LandingPage: React.FC = () => {
                 transition={{ delay: 0.36 + i * 0.07 }}
                 onClick={() => handleStart(action.label)}
                 className="chip"
+              >
+                <span>{action.icon}</span>
+                <span>{action.label}</span>
+              </motion.button>
+            ))}
+          </motion.div>
+
+          {/* Sinhala example chips — show off සිංහල fluency immediately */}
+          <motion.div
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.5 }}
+            className="flex flex-wrap items-center justify-center gap-2 mb-6"
+          >
+            <span className="text-[11px] font-semibold text-violet-400 self-center mr-0.5">සිංහලෙන්:</span>
+            {SINHALA_ACTIONS.map((action, i) => (
+              <motion.button
+                key={action.label}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.56 + i * 0.07 }}
+                onClick={() => handleStart(action.send)}
+                className="chip border-violet-200/70 bg-violet-50/60 text-violet-700 hover:bg-violet-100/70"
               >
                 <span>{action.icon}</span>
                 <span>{action.label}</span>

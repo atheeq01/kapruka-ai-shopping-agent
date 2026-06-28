@@ -35,3 +35,17 @@ class VoiceResponse(BaseModel):
     transcription: str   # backward-compat alias
     detected_lang: str
     status: str = "success"
+
+
+class GiftMessageRequest(BaseModel):
+    recipient_name: Optional[str] = None
+    sender_name: Optional[str] = None
+    occasion: Optional[str] = None
+    relationship: Optional[str] = None
+    items: Optional[List[str]] = None       # product names in the cart, for context
+    language: Optional[str] = "auto"        # AUTO | EN | SI | TA
+    anonymous: Optional[bool] = False
+
+
+class GiftMessageResponse(BaseModel):
+    message: str

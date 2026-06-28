@@ -6,6 +6,7 @@ import { CartPanel } from '../components/layout/CartPanel';
 import { MessageBubble } from '../components/chat/MessageBubble';
 import { TypingIndicator } from '../components/chat/TypingIndicator';
 import { PromptInput } from '../components/chat/PromptInput';
+import { LanguageToggle } from '../components/ui/LanguageToggle';
 import { useAppStore } from '../store/cartStore';
 import { sendAgentMessage, sendVoiceMessage } from '../lib/agentStream';
 import { cn } from '../lib/utils';
@@ -72,6 +73,8 @@ export const ChatPage: React.FC = () => {
             {conversation.title === 'New chat' ? 'Kapruka AI' : conversation.title}
           </p>
 
+          <div className="flex items-center gap-2">
+          <LanguageToggle className="hidden sm:flex" />
           <button
             onClick={() => setIsCartOpen((v) => !v)}
             className="relative flex items-center gap-1.5 bg-white/90 border border-gray-100 rounded-full px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-white shadow-sm transition-all duration-200 hover:scale-105 active:scale-95"
@@ -84,6 +87,7 @@ export const ChatPage: React.FC = () => {
               </span>
             )}
           </button>
+          </div>
         </header>
 
         {/* Messages */}
@@ -97,7 +101,7 @@ export const ChatPage: React.FC = () => {
         </div>
 
         {/* Input */}
-        <div className="px-4 md:px-8 py-4 pb-6 glass-card border-t border-white/60">
+        <div className="px-4 md:px-8 py-4 pb-6 chat-footer">
           <div className={containerClass}>
             <PromptInput
               placeholder="Ask me anything — flowers, cakes, gifts..."

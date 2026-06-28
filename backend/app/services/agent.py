@@ -15,8 +15,9 @@ from app.services.products import (
     parse_product_detail_json,
     parse_order,
     parse_order_result,
+    filter_search_results,
 )
-from app.services.language import detect_language, language_directive
+from app.services.language import detect_language, language_directive, LANG_LABELS
 from app.core.config import settings
 
 MAX_ITERATIONS = 10
@@ -173,8 +174,91 @@ def _force_json_format(name: str, args: dict) -> dict:
     return args
 
 
+# ── Local (non-MCP) cart tool ───────────────────────────────────────────────────
+# The shopping cart lives in the browser (stateless backend). To let the agent act
+# on references like "add the second one" / "put 2 of those in my cart", we expose a
+# synthetic `add_to_cart` tool. It is NOT sent to MCP — the loop intercepts it and
+# emits a `cart_add` SSE event the frontend applies to the React cart store.
+ADD_TO_CART_TOOL = "add_to_cart"
+
+
+def _local_cart_tool() -> types.Tool:
+    item = types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "product_id": types.Schema(type=types.Type.STRING, description="Exact product id from a search/detail result in THIS conversation."),
+            "name":       types.Schema(type=types.Type.STRING, description="Exact product name from the tool result."),
+            "price":      types.Schema(type=types.Type.NUMBER, description="Unit price — the CHOSEN variant's price if the product has sizes."),
+            "quantity":   types.Schema(type=types.Type.INTEGER, description="How many to add. Defaults to 1."),
+            "size":       types.Schema(type=types.Type.STRING, description="Chosen size/weight label (e.g. '2KG'), if the product has variants."),
+            "image":      types.Schema(type=types.Type.STRING, description="Product image URL, if known."),
+            "icing_text": types.Schema(type=types.Type.STRING, description="Cake icing greeting, only if the customer asked for one."),
+        },
+        required=["product_id", "name"],
+    )
+    return types.Tool(function_declarations=[
+        types.FunctionDeclaration(
+            name=ADD_TO_CART_TOOL,
+            description=(
+                "Add one or more products to the customer's shopping cart in the app. Use this "
+                "whenever the customer asks you to add something they can see in the current "
+                "conversation — e.g. 'add the second one', 'add 2 of those', 'put the Red Velvet "
+                "in my cart'. ONLY add products that appeared in a kapruka_search_products or "
+                "kapruka_get_product result in THIS conversation; copy their exact product_id, "
+                "name and price (use the selected variant's price for sized items). After calling, "
+                "confirm warmly what you added."
+            ),
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={"items": types.Schema(type=types.Type.ARRAY, description="Products to add.", items=item)},
+                required=["items"],
+            ),
+        )
+    ])
+
+
+def _normalize_cart_items(args: dict) -> list[dict]:
+    """Validate + normalise add_to_cart arguments into clean cart items."""
+    flat = _flatten_args(args)
+    raw = flat.get("items")
+    if isinstance(raw, dict):
+        raw = [raw]
+    if not isinstance(raw, list):
+        return []
+    items: list[dict] = []
+    for it in raw:
+        if not isinstance(it, dict):
+            continue
+        pid = str(it.get("product_id") or it.get("id") or "").strip()
+        name = str(it.get("name") or "").strip()
+        if not pid or not name:
+            continue
+        try:
+            qty = max(1, int(it.get("quantity") or 1))
+        except (TypeError, ValueError):
+            qty = 1
+        item: dict = {"product_id": pid, "name": name, "quantity": qty}
+        if it.get("price") is not None:
+            try:
+                item["price"] = float(it["price"])
+            except (TypeError, ValueError):
+                pass
+        for k in ("size", "image", "icing_text"):
+            if it.get(k):
+                item[k] = str(it[k])
+        items.append(item)
+    return items
+
+
 def _tool_label(name: str, args: dict) -> str:
     args = _flatten_args(args)
+    if name == ADD_TO_CART_TOOL:
+        items = _normalize_cart_items(args)
+        if len(items) == 1:
+            return f"Adding {items[0]['name']} to your cart"
+        if len(items) > 1:
+            return f"Adding {len(items)} items to your cart"
+        return "Updating your cart"
     if name == "kapruka_search_products":
         query = args.get("query") or args.get("q") or args.get("keyword")
         return f'Searching the catalog for "{query}"' if query else "Searching the Kapruka catalog"
@@ -240,20 +324,28 @@ async def process_chat(
     # ── 2. Build system prompt ─────────────────────────────────────────────────
     system_parts = [KAPRUKA_AGENT_PROMPT]
 
+    # An explicit language toggle (EN/SI/TA) OVERRIDES auto-detection so the user can
+    # force the reply language. 'AUTO' (the default) mirrors the detected language.
+    _PREF_TO_LANG = {"EN": "en", "SI": "si", "TA": "ta"}
+    forced_lang = _PREF_TO_LANG.get((language_preference or "").upper())
+    effective_lang = forced_lang or detected_lang
+
     # Language directive (overrides the generic mirroring note in base prompt)
-    lang_dir = language_directive(detected_lang)
+    lang_dir = language_directive(effective_lang)
     system_parts.append(
         "\n\n=== LANGUAGE & STYLE DIRECTIVE (governs HOW you write — never overrides the "
         f"grounding/tool rules in section 3) ===\n{lang_dir}"
     )
+    if forced_lang:
+        system_parts.append(
+            f"\n\nThe user has EXPLICITLY selected {LANG_LABELS.get(forced_lang, forced_lang)} "
+            "via the language toggle. Reply in that language regardless of which language their "
+            "message was typed in (this overrides language mirroring, but never the grounding rules)."
+        )
 
     if cart:
         cart_data = [c.model_dump() if hasattr(c, "model_dump") else c for c in cart]
         system_parts.append(f"\n\n=== CURRENT CART ===\n{json.dumps(cart_data, indent=2)}")
-
-    # Only append user preference if it was explicitly set (not auto/matched)
-    if language_preference and language_preference not in ("auto", detected_lang):
-        system_parts.append(f"\n\nUser previously preferred: {language_preference}")
 
     system_prompt = "".join(system_parts)
 
@@ -271,9 +363,14 @@ async def process_chat(
         role = "user" if msg.role == "user" else "model"
         history.append(types.Content(role=role, parts=[types.Part(text=msg.content)]))
 
+    # Expose the synthetic cart tool alongside the MCP catalogue so the agent can
+    # act on "add the second one to my cart" style references.
+    all_tools = list(gemini_tools)
+    all_tools.append(_local_cart_tool())
+
     config = types.GenerateContentConfig(
         system_instruction=system_prompt,
-        tools=gemini_tools if gemini_tools else None,
+        tools=all_tools,
         temperature=0.7,
         thinking_config=types.ThinkingConfig(include_thoughts=True),
     )
@@ -366,6 +463,26 @@ async def process_chat(
                 "label": _tool_label(fc.name, args),
             })
 
+            # ── Local cart tool: handled here, never sent to MCP ────────────────
+            if fc.name == ADD_TO_CART_TOOL:
+                items = _normalize_cart_items(args)
+                if items:
+                    yield _sse({"type": "cart_add", "items": items})
+                    added = ", ".join(f"{i['quantity']}× {i['name']}" for i in items)
+                    output = f"Added to the customer's cart: {added}. The cart in the app now reflects this."
+                else:
+                    output = (
+                        "No valid items to add. Ask the customer which product (from the results "
+                        "already shown) they want, then call add_to_cart with its product_id, name and price."
+                    )
+                yield _sse({"type": "tool_result", "name": fc.name, "data": output})
+                tool_response_parts.append(
+                    types.Part(function_response=types.FunctionResponse(
+                        name=fc.name, response={"output": output},
+                    ))
+                )
+                continue
+
             try:
                 session = await _get_mcp_session()
                 call_args = _force_json_format(fc.name, args)
@@ -382,14 +499,40 @@ async def process_chat(
                 try:
                     # JSON is the rich path (clean CDN images, descriptions, stock).
                     parsed = parse_search_json(output)
-                    if parsed:
-                        yield _sse({"type": "products", "items": parsed})
-                    else:
+                    if not parsed:
                         # Defensive fallback if the server returned Markdown anyway.
                         md = parse_search_markdown(output)
                         if md:
-                            md = await enrich_with_images(md)
-                            yield _sse({"type": "products", "items": md})
+                            parsed = await enrich_with_images(md)
+
+                    if parsed:
+                        # ── Relevance guard (Task 1) ────────────────────────────
+                        # Enforce category + gender consistency BEFORE rendering, so
+                        # we never show a grid that contradicts the request (e.g.
+                        # cakes under "Flowers", men's scents under "perfume for her").
+                        search_args = _flatten_args(args)
+                        query = (
+                            search_args.get("query")
+                            or search_args.get("q")
+                            or search_args.get("keyword")
+                            or ""
+                        )
+                        kept, dropped = filter_search_results(query, parsed)
+
+                        if kept:
+                            yield _sse({"type": "products", "items": kept})
+                        if dropped:
+                            # Steer the model: describe only what's shown, stay honest
+                            # if the on-target set is thin. (Grounding rule still holds.)
+                            shown = ", ".join(p.get("name", "item") for p in kept) or "none"
+                            output += (
+                                f"\n\n[RELEVANCE FILTER] For the query {query!r}, only these "
+                                f"on-target items are shown to the user: {shown}. "
+                                f"{len(dropped)} off-category / mismatched-gender result(s) were "
+                                f"HIDDEN — do NOT mention or describe them. If the shown set is too "
+                                f"small or empty, say so honestly and offer to refine or suggest the "
+                                f"closest valid category. Never pad with the hidden items."
+                            )
                 except Exception as e:
                     print(f"[agent] search parse failed: {e}")
 

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Minus, Plus, ShoppingBag, ArrowLeft, Lock, Package, ChevronDown } from 'lucide-react';
+import { X, Minus, Plus, ShoppingBag, ArrowLeft, Lock, Package, ChevronDown, Sparkles, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../../store/cartStore';
 import { sendAgentMessage } from '../../lib/agentStream';
+import { writeGiftMessage } from '../../lib/api';
 import { SearchableSelect } from '../ui/SearchableSelect';
 import { SRI_LANKA_CITIES, LOCATION_TYPES } from '../../lib/sriLankaCities';
 
@@ -49,9 +50,29 @@ export const CartPanel: React.FC<CartPanelProps> = ({ isOpen, onClose, conversat
   const [anonymous, setAnonymous]         = useState(false);
   const [giftMessage, setGiftMessage]     = useState('');
   const [isSubmitting, setIsSubmitting]   = useState(false);
+  const [draftingMsg, setDraftingMsg]     = useState(false);
+  const languagePreference = useAppStore((s) => s.languagePreference);
 
   const todayISO    = new Date().toISOString().slice(0, 10);
   const totalAmount = cart.reduce((acc, i) => acc + (i.price || 0) * i.quantity, 0);
+
+  const handleDraftGiftMessage = async () => {
+    setDraftingMsg(true);
+    try {
+      const message = await writeGiftMessage({
+        recipient_name: recipientName || undefined,
+        sender_name: anonymous ? undefined : (senderName || undefined),
+        anonymous,
+        items: cart.map((i) => i.name).filter(Boolean) as string[],
+        language: languagePreference,
+      });
+      if (message) setGiftMessage(message);
+    } catch {
+      alert("Sorry — couldn't draft a message just now. Please try again.");
+    } finally {
+      setDraftingMsg(false);
+    }
+  };
 
   const resetAndClose = () => { setStep('cart'); onClose(); };
 
@@ -300,10 +321,24 @@ Personal gift message: ${giftMessage.trim() || 'None'}`;
                         <input type="checkbox" checked={anonymous} onChange={(e) => setAnonymous(e.target.checked)} className="h-3.5 w-3.5 rounded accent-pink-500" />
                         Send anonymously
                       </label>
-                      <Field label="Gift Card Message">
-                        <textarea value={giftMessage} onChange={(e) => setGiftMessage(e.target.value)} placeholder="Personal message on gift card (optional)" rows={3} maxLength={300} className={`${inputCls} resize-none`} />
+                      <div>
+                        <div className="mb-1 flex items-center justify-between">
+                          <label className="block text-xs font-semibold text-gray-500">Gift Card Message</label>
+                          <button
+                            type="button"
+                            onClick={handleDraftGiftMessage}
+                            disabled={draftingMsg}
+                            title="Let Kapruka write a heartfelt message for you"
+                            className="flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-600 transition-colors hover:bg-violet-100 disabled:opacity-60"
+                          >
+                            {draftingMsg
+                              ? <><Loader2 size={10} className="animate-spin" /> Writing…</>
+                              : <><Sparkles size={10} /> Write one for me</>}
+                          </button>
+                        </div>
+                        <textarea value={giftMessage} onChange={(e) => setGiftMessage(e.target.value)} placeholder="Personal message on gift card — or tap ✨ to have Kapruka write it" rows={3} maxLength={300} className={`${inputCls} resize-none`} />
                         <p className="text-right text-[10px] text-gray-400 mt-0.5">{giftMessage.length}/300</p>
-                      </Field>
+                      </div>
                     </div>
                   </section>
 

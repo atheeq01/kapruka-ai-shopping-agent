@@ -120,6 +120,25 @@ async function _streamIntoMessage(conversationId: string, botMsgId: string): Pro
             } else if (event.type === 'product_detail') {
               if (event.item) currentProductDetail = event.item;
               dirty = true;
+            } else if (event.type === 'cart_add') {
+              // Agent added item(s) to the cart on the customer's behalf
+              // (e.g. "add the second one"). Apply to the React cart store.
+              if (Array.isArray(event.items)) {
+                const { addToCart } = useAppStore.getState();
+                for (const it of event.items) {
+                  if (!it?.product_id || !it?.name) continue;
+                  addToCart({
+                    product_id: String(it.product_id),
+                    quantity: Number(it.quantity) || 1,
+                    name: it.name,
+                    price: typeof it.price === 'number' ? it.price : undefined,
+                    image: it.image,
+                    size: it.size,
+                    icing_text: it.icing_text,
+                  });
+                }
+              }
+              dirty = true;
             } else if (event.type === 'order') {
               if (event.order) {
                 useAppStore.getState().updateMessage(conversationId, botMsgId, {

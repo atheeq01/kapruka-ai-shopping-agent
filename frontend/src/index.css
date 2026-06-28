@@ -158,6 +158,16 @@
     background-size: 28px 28px;
   }
 
+  /* ── Chat input footer ─────
+     Shares the exact base colour of .chat-bg so the input area melts into the
+     message area as ONE smooth surface — no translucent glass (which revealed the
+     page gradient and split the band into mismatched left/right colours) and no
+     hard border seam. A whisper-soft top shadow gives depth without a colour line. */
+  .chat-footer {
+    background-color: #f8f3ff;
+    box-shadow: 0 -8px 20px -12px rgba(124, 58, 237, 0.12);
+  }
+
   /* ── Pink send button ───── */
   .btn-send {
     background: linear-gradient(135deg, #ff3fa1 0%, #ff007c 100%);

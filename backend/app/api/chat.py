@@ -1,7 +1,10 @@
 import json
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
-from app.schemas.chat import ChatRequest, DetectLangRequest, DetectLangResponse, VoiceResponse
+from app.schemas.chat import (
+    ChatRequest, DetectLangRequest, DetectLangResponse, VoiceResponse,
+    GiftMessageRequest, GiftMessageResponse,
+)
 from app.services.agent import process_chat
 from app.services.language import quick_detect, detect_language
 from app.mcp.client import mcp_client
@@ -95,6 +98,69 @@ async def detect_lang_endpoint(request: DetectLangRequest):
 
     detected = quick_detect(request.text) or "en"
     return DetectLangResponse(detected_lang=detected)
+
+
+@router.post("/gift-message", response_model=GiftMessageResponse)
+async def write_gift_message(request: GiftMessageRequest):
+    """
+    Draft a short, heartfelt gift-card message with Gemini (Task 9 creativity wow).
+    Stateless — all context comes in the request; nothing is stored.
+    """
+    from google.genai import types as gtypes
+    from app.services.agent import _get_client
+    from app.core.config import settings
+
+    _LANG_NAME = {
+        "EN": "English", "SI": "Sinhala (සිංහල script)", "TA": "Tamil (தமிழ் script)",
+    }
+    lang = (request.language or "auto").upper()
+    lang_line = (
+        f"Write the message in {_LANG_NAME[lang]}."
+        if lang in _LANG_NAME
+        else "Write in the language that best fits the recipient (default warm English)."
+    )
+
+    ctx_parts = []
+    if request.recipient_name:
+        ctx_parts.append(f"Recipient: {request.recipient_name}")
+    if request.relationship:
+        ctx_parts.append(f"Relationship to sender: {request.relationship}")
+    if request.occasion:
+        ctx_parts.append(f"Occasion: {request.occasion}")
+    if request.items:
+        ctx_parts.append(f"Gift being sent: {', '.join(request.items[:5])}")
+    if request.sender_name and not request.anonymous:
+        ctx_parts.append(f"Sign off from: {request.sender_name}")
+    elif request.anonymous:
+        ctx_parts.append("The sender is anonymous — do NOT include a sender name.")
+    context = "\n".join(ctx_parts) or "A thoughtful gift for someone special."
+
+    try:
+        client = _get_client()
+        resp = await client.aio.models.generate_content(
+            model=settings.gemini_model,
+            contents=(
+                "Write a warm, sincere gift-card message for the gift below.\n\n"
+                f"{context}\n\n"
+                f"{lang_line}\n"
+                "Rules: 2-4 short sentences, heartfelt and natural (not cheesy or generic), "
+                "suitable to print on a gift card. If a sender name is given and not anonymous, "
+                "sign off with it on a new line. Return ONLY the message text — no quotes, no "
+                "preamble, no explanation."
+            ),
+            config=gtypes.GenerateContentConfig(
+                temperature=0.9,
+                max_output_tokens=200,
+                thinking_config=gtypes.ThinkingConfig(thinking_budget=0),
+            ),
+        )
+        message = (resp.text or "").strip().strip('"').strip()
+        if not message:
+            raise ValueError("empty draft")
+        return GiftMessageResponse(message=message)
+    except Exception as e:
+        print(f"[gift-message] error: {e}")
+        raise HTTPException(status_code=500, detail="Could not draft a message right now.")
 
 
 @router.post("/audio", response_model=VoiceResponse)
