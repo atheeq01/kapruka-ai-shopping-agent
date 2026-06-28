@@ -121,7 +121,7 @@ export const ProductResultsPanel: React.FC<ProductResultsPanelProps> = ({ produc
       </div>
 
       {view === 'grid' ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-px bg-gray-100">
+        <div className="grid grid-cols-2 @md:grid-cols-3 @2xl:grid-cols-4 @5xl:grid-cols-5 gap-4 @md:gap-5 p-4 bg-gray-50/50">
           {shown.map((product, index) => (
             <ProductCard key={product.id} product={product} index={index} view="grid" />
           ))}

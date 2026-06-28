@@ -3,6 +3,12 @@ import type { AgentStep } from '../store/cartStore';
 
 const API_BASE = 'http://localhost:8000';
 
+let _pendingOrderIds: string[] = [];
+
+export function setPendingOrderItems(ids: string[]): void {
+  _pendingOrderIds = ids;
+}
+
 const uid = () =>
   typeof crypto !== 'undefined' && crypto.randomUUID
     ? crypto.randomUUID()
@@ -16,8 +22,6 @@ const uid = () =>
  * Reads conversation history from the store (excluding the bot placeholder).
  */
 async function _streamIntoMessage(conversationId: string, botMsgId: string): Promise<void> {
-  const store = useAppStore.getState();
-
   let currentText     = '';
   let currentThought  = '';
   let currentProducts: any[] = [];
@@ -128,6 +132,11 @@ async function _streamIntoMessage(conversationId: string, botMsgId: string): Pro
                 useAppStore.getState().updateMessage(conversationId, botMsgId, {
                   orderConfirmation: event.order,
                 });
+                if (_pendingOrderIds.length) {
+                  const { removeFromCart } = useAppStore.getState();
+                  _pendingOrderIds.forEach((id) => removeFromCart(id));
+                  _pendingOrderIds = [];
+                }
               }
               dirty = true;
             } else if (event.type === 'tool_result') {

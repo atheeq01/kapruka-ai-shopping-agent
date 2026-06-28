@@ -1,93 +1,232 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Tamil:wght@400;500;600;700;800&family=Noto+Sans+Sinhala:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+Tamil:wght@400;500;600;700;800&family=Noto+Sans+Sinhala:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 @config "../tailwind.config.ts";
 
 @layer base {
-  body {
-    @apply bg-kapruka-surface text-kapruka-dark antialiased selection:bg-kapruka-primary selection:text-white;
-    font-family: 'Inter', 'Noto Sans Tamil', 'Noto Sans Sinhala', sans-serif;
+  html, body, #root {
+    height: 100%;
   }
 
-  /* Slim, soft scrollbars */
+  body {
+    @apply antialiased;
+    font-family: 'Inter', 'Noto Sans Tamil', 'Noto Sans Sinhala', sans-serif;
+    color: #1a1a2e;
+  }
+
   * {
     scrollbar-width: thin;
-    scrollbar-color: rgba(139, 92, 246, 0.3) transparent;
+    scrollbar-color: rgba(244, 114, 182, 0.25) transparent;
   }
-  *::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-  }
+  *::-webkit-scrollbar { width: 5px; height: 5px; }
   *::-webkit-scrollbar-thumb {
-    background-color: rgba(139, 92, 246, 0.25);
+    background-color: rgba(244, 114, 182, 0.22);
     border-radius: 9999px;
   }
   *::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(139, 92, 246, 0.45);
+    background-color: rgba(244, 114, 182, 0.45);
   }
 }
 
 @layer utilities {
+  /* ── App gradient background ───── */
+  .bg-app {
+    background: linear-gradient(
+      150deg,
+      #fff5fe 0%,
+      #fce8ff 18%,
+      #f3e8ff 38%,
+      #ede9fe 55%,
+      #fce7f3 75%,
+      #fff0f9 100%
+    );
+  }
+
+  /* ── Animated text gradient ───── */
   .text-gradient {
     @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(110deg, #7c3aed, #4338ca, #c026d3, #7c3aed);
+    background-image: linear-gradient(135deg, #9333ea 0%, #ec4899 50%, #f97316 100%);
     background-size: 200% auto;
-    animation: gradient-pan 6s linear infinite;
+    animation: gradient-pan 5s linear infinite;
   }
 
+  /* ── Radial glow overlay ───── */
   .glow-bg {
-    background: radial-gradient(circle at center, rgba(167, 139, 250, 0.15) 0%, rgba(249, 250, 251, 0) 50%);
+    background: radial-gradient(ellipse at 50% 35%, rgba(232, 121, 249, 0.1) 0%, transparent 65%);
   }
 
+  /* ── Sidebar glass ───── */
+  .glass-sidebar {
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-right: 1px solid rgba(255, 255, 255, 0.85);
+  }
+
+  /* ── General glass card ───── */
+  .glass-card {
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.9);
+  }
+
+  /* Alias kept for old references */
   .glass-panel {
-    @apply bg-white/80 backdrop-blur-md border border-white/40 shadow-sm;
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.85);
   }
 
+  /* ── Small orb avatar (AI messages) ───── */
+  .orb-avatar {
+    background: radial-gradient(
+      circle at 34% 28%,
+      #ffe0f8 0%,
+      #ffaee0 18%,
+      #f472b6 36%,
+      #c084fc 56%,
+      #818cf8 76%,
+      #34d399 92%
+    );
+    border-radius: 50%;
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.32) inset,
+      -3px -3px 10px rgba(255, 255, 255, 0.38) inset,
+      0 5px 18px rgba(244, 114, 182, 0.55);
+    flex-shrink: 0;
+  }
+
+  /* ── Input bar ───── */
+  .input-bar {
+    background: rgba(255, 255, 255, 0.82);
+    border: 1.5px solid rgba(245, 208, 254, 0.65);
+    border-radius: 1.5rem;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    transition: border-color 0.22s ease, box-shadow 0.22s ease;
+  }
+  .input-bar:focus-within {
+    border-color: rgba(232, 121, 249, 0.58);
+    box-shadow: 0 0 0 3.5px rgba(232, 121, 249, 0.1), 0 8px 30px rgba(232, 121, 249, 0.1);
+  }
+
+  /* ── Quick-action chip ───── */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 9999px;
+    padding: 7px 16px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid rgba(245, 208, 254, 0.55);
+    color: #4b5563;
+    backdrop-filter: blur(10px);
+    transition: all 0.2s ease;
+  }
+  .chip:hover {
+    background: rgba(255, 255, 255, 0.96);
+    border-color: rgba(232, 121, 249, 0.48);
+    color: #7c3aed;
+    box-shadow: 0 4px 16px rgba(232, 121, 249, 0.14);
+    transform: translateY(-2px);
+  }
+
+  /* ── User chat bubble ───── */
+  .bubble-user {
+    background: linear-gradient(135deg, #ff3fa1 0%, #ff007c 100%);
+    box-shadow: 0 4px 20px rgba(255, 0, 124, 0.32);
+    color: white;
+  }
+
+  /* ── AI chat bubble ───── */
+  .bubble-ai {
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.055);
+    color: #1a1a2e;
+  }
+
+  /* ── Chat message area dotted background ───── */
+  .chat-bg {
+    background-color: #f8f3ff;
+    background-image: radial-gradient(circle, rgba(196, 181, 253, 0.18) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+
+  /* ── Pink send button ───── */
+  .btn-send {
+    background: linear-gradient(135deg, #ff3fa1 0%, #ff007c 100%);
+    box-shadow: 0 4px 16px rgba(255, 0, 124, 0.42);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    color: white;
+  }
+  .btn-send:hover:not(:disabled) {
+    box-shadow: 0 6px 24px rgba(255, 0, 124, 0.55);
+    transform: scale(1.06);
+  }
+  .btn-send:active:not(:disabled) {
+    transform: scale(0.94);
+  }
+  .btn-send:disabled {
+    background: linear-gradient(135deg, #e5e7eb, #d1d5db);
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+
+  /* ── Animate blob ───── */
+  .animate-blob {
+    animation: blob 14s ease-in-out infinite;
+  }
+
+  /* ── Shimmer animation (for gradient text) ───── */
+  .animate-shimmer {
+    background-size: 200% auto;
+    animation: shimmer 2s linear infinite;
+  }
+
+  /* ── Scrollbar hide ───── */
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
 }
 
-/* ── Keyframes (referenced by arbitrary `animate-[...]` utilities) ─────────────── */
-
-@keyframes shimmer {
-  to {
-    background-position: 200% center;
-  }
-}
+/* ── Keyframes ───────────────────────────────── */
 
 @keyframes gradient-pan {
-  to {
-    background-position: 200% center;
-  }
-}
-
-@keyframes blob {
-  0%, 100% {
-    transform: translate(0, 0) scale(1);
-  }
-  33% {
-    transform: translate(30px, -40px) scale(1.1);
-  }
-  66% {
-    transform: translate(-25px, 25px) scale(0.95);
-  }
+  to { background-position: 200% center; }
 }
 
 @keyframes float {
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-10px);
-  }
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-18px); }
+}
+
+@keyframes blob {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%       { transform: translate(30px, -40px) scale(1.08); }
+  66%       { transform: translate(-20px, 22px) scale(0.95); }
+}
+
+@keyframes shimmer {
+  to { background-position: 200% center; }
 }
 
 @keyframes shine {
-  100% {
-    transform: translateX(200%);
-  }
+  100% { transform: translateX(200%); }
+}
+
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse-ring {
+  0%   { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(1.8); opacity: 0; }
 }

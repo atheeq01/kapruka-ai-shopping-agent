@@ -38,3 +38,4 @@ export const LOCATION_TYPES = [
   'Hotel',
   'Other',
 ];
+

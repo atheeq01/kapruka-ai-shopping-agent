@@ -13,7 +13,7 @@ interface PromptInputProps {
 }
 
 export const PromptInput: React.FC<PromptInputProps> = ({
-  placeholder = 'Type in English, தமிழ், සිංහල, or romanized…',
+  placeholder = 'Ask me anything...',
   onSubmit,
   onVoiceBlob,
   size = 'md',
@@ -44,28 +44,20 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     }
   };
 
-  const handleVoiceSend = (blob: Blob) => {
-    setIsRecording(false);
-    onVoiceBlob?.(blob);
-  };
-
   if (isRecording) {
     return (
       <RecordingBar
         onCancel={() => setIsRecording(false)}
-        onSend={handleVoiceSend}
+        onSend={(blob) => {
+          setIsRecording(false);
+          onVoiceBlob?.(blob);
+        }}
       />
     );
   }
 
   return (
-    <div
-      className={cn(
-        'flex items-end gap-2 bg-white rounded-2xl border border-gray-200 shadow-sm w-full',
-        'focus-within:ring-2 focus-within:ring-violet-400/30 focus-within:border-violet-400 transition-all',
-        isLg ? 'p-2' : 'p-1 pr-2',
-      )}
-    >
+    <div className="input-bar w-full px-4 pt-3 pb-2.5">
       <textarea
         ref={textareaRef}
         autoFocus={autoFocus}
@@ -75,38 +67,34 @@ export const PromptInput: React.FC<PromptInputProps> = ({
         placeholder={placeholder}
         rows={1}
         className={cn(
-          'flex-1 bg-transparent border-none focus:outline-none text-kapruka-dark placeholder:text-gray-400 resize-none overflow-hidden leading-relaxed',
-          isLg ? 'text-base py-2 px-2' : 'text-sm py-2 px-1',
+          'w-full bg-transparent border-none focus:outline-none text-[#1a1a2e] placeholder:text-gray-400 resize-none overflow-hidden leading-relaxed',
+          isLg ? 'text-base' : 'text-sm',
         )}
         style={{ minHeight: isLg ? '44px' : '36px' }}
       />
 
-      <button
-        type="button"
-        onClick={() => setIsRecording(true)}
-        className={cn(
-          'shrink-0 rounded-full transition-colors text-gray-400 hover:text-violet-500 hover:bg-violet-50',
-          isLg ? 'p-3' : 'p-2',
-        )}
-        title="Record voice message"
-      >
-        <Mic size={isLg ? 18 : 16} />
-      </button>
+      <div className="flex items-center justify-end gap-2 mt-2">
+        <button
+          type="button"
+          onClick={() => setIsRecording(true)}
+          className="flex items-center gap-1.5 text-gray-400 hover:text-pink-500 text-xs font-medium transition-all duration-200 rounded-full px-2.5 py-1.5 hover:bg-pink-50"
+        >
+          <Mic size={13} />
+          <span>Voice</span>
+        </button>
 
-      <motion.button
-        type="button"
-        onClick={submit}
-        disabled={!value.trim()}
-        whileHover={value.trim() ? { scale: 1.08 } : undefined}
-        whileTap={value.trim() ? { scale: 0.92 } : undefined}
-        className={cn(
-          'shrink-0 rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white shadow-md shadow-violet-300/50 transition-opacity',
-          'disabled:cursor-not-allowed disabled:from-gray-300 disabled:to-gray-300 disabled:shadow-none',
-          isLg ? 'p-3' : 'p-2',
-        )}
-      >
-        <Send size={isLg ? 18 : 16} />
-      </motion.button>
+        <motion.button
+          type="button"
+          onClick={submit}
+          disabled={!value.trim()}
+          whileHover={value.trim() ? { scale: 1.06 } : undefined}
+          whileTap={value.trim() ? { scale: 0.93 } : undefined}
+          className="btn-send rounded-full px-4 py-1.5 text-sm font-semibold flex items-center gap-1.5"
+        >
+          <Send size={13} />
+          <span>Send</span>
+        </motion.button>
+      </div>
     </div>
   );
 };

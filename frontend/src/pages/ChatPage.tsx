@@ -1,13 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Check, ChevronLeft, Share2, ShoppingBag } from 'lucide-react';
+import { X, ShoppingBag } from 'lucide-react';
 import { Sidebar } from '../components/layout/Sidebar';
-import { CartDrawer } from '../components/layout/CartDrawer';
+import { CartPanel } from '../components/layout/CartPanel';
 import { MessageBubble } from '../components/chat/MessageBubble';
 import { TypingIndicator } from '../components/chat/TypingIndicator';
 import { PromptInput } from '../components/chat/PromptInput';
 import { useAppStore } from '../store/cartStore';
 import { sendAgentMessage, sendVoiceMessage } from '../lib/agentStream';
+import { cn } from '../lib/utils';
 
 export const ChatPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -15,13 +16,11 @@ export const ChatPage: React.FC = () => {
   const conversation = useAppStore((s) => (id ? s.conversations[id] : undefined));
   const cartCount = useAppStore((s) => s.cart.reduce((acc, i) => acc + i.quantity, 0));
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!id || !conversation) {
-      navigate('/', { replace: true });
-    }
+    if (!id || !conversation) navigate('/', { replace: true });
   }, [id, conversation, navigate]);
 
   useEffect(() => {
@@ -40,53 +39,56 @@ export const ChatPage: React.FC = () => {
     !lastMessage.steps?.length &&
     !lastMessage.products?.length;
 
-  const handleShare = async () => {
-    try {
-      await navigator.clipboard.writeText(`${window.location.origin}/c/${id}`);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* clipboard unavailable, fail silently */
-    }
-  };
+  const isAnyPanelOpen = isSidebarOpen || isCartOpen;
+  const containerClass = cn(
+    "mx-auto flex flex-col transition-all duration-700 ease-in-out w-full @container",
+    isAnyPanelOpen ? "max-w-4xl" : "max-w-4xl lg:max-w-[75%]"
+  );
 
   return (
-    <div className="flex h-screen overflow-hidden bg-white">
-      <Sidebar />
+    <div className="flex h-screen overflow-hidden bg-app relative">
+      {/* Ambient blobs */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute -top-24 -left-16 h-80 w-80 rounded-full bg-pink-300/10 blur-3xl" />
+        <div className="absolute bottom-0 right-0 h-80 w-80 rounded-full bg-violet-300/10 blur-3xl" />
+      </div>
 
-      <div className="flex-1 flex flex-col h-full overflow-hidden">
-        <header className="flex items-center justify-between px-4 md:px-6 py-3 border-b border-gray-100 bg-white sticky top-0 z-10">
+      {/* Sidebar */}
+      <Sidebar onPanelChange={setIsSidebarOpen} />
+
+      {/* Main chat column */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden relative z-10 min-w-0">
+        {/* Header */}
+        <header className="flex items-center justify-between px-4 md:px-6 py-3 glass-card border-b border-white/60 sticky top-0 z-20">
           <button
             onClick={() => navigate('/')}
-            className="flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-kapruka-dark transition-colors"
+            title="Back to home"
+            className="w-8 h-8 rounded-full bg-white/90 border border-gray-100 flex items-center justify-center text-gray-500 hover:text-gray-800 hover:bg-white shadow-sm transition-all duration-200 hover:scale-105 active:scale-95"
           >
-            <ChevronLeft size={16} /> Back
+            <X size={15} />
           </button>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsCartOpen(true)}
-              className="relative flex items-center gap-1.5 text-sm font-medium text-gray-700 border border-gray-200 rounded-full px-3.5 py-1.5 hover:bg-gray-50 transition-colors"
-            >
-              <ShoppingBag size={14} /> Cart
-              {cartCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-kapruka-orange text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                  {cartCount}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={handleShare}
-              className="flex items-center gap-1.5 text-sm font-medium text-gray-700 border border-gray-200 rounded-full px-3.5 py-1.5 hover:bg-gray-50 transition-colors"
-            >
-              {copied ? <Check size={14} className="text-kapruka-green" /> : <Share2 size={14} />}
-              {copied ? 'Copied' : 'Share'}
-            </button>
-          </div>
+          <p className="text-sm font-semibold text-gray-600 truncate max-w-[200px] md:max-w-xs">
+            {conversation.title === 'New chat' ? 'Kapruka AI' : conversation.title}
+          </p>
+
+          <button
+            onClick={() => setIsCartOpen((v) => !v)}
+            className="relative flex items-center gap-1.5 bg-white/90 border border-gray-100 rounded-full px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-white shadow-sm transition-all duration-200 hover:scale-105 active:scale-95"
+          >
+            <ShoppingBag size={13} />
+            <span>Cart</span>
+            {cartCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-gradient-to-r from-pink-500 to-fuchsia-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                {cartCount}
+              </span>
+            )}
+          </button>
         </header>
 
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 md:px-8 py-6 bg-white">
-          <div className="max-w-3xl mx-auto flex flex-col">
+        {/* Messages */}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto chat-bg px-4 md:px-8 py-6">
+          <div className={containerClass}>
             {conversation.messages.map((msg) => (
               <MessageBubble key={msg.id} message={msg} />
             ))}
@@ -94,18 +96,24 @@ export const ChatPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="px-4 md:px-8 py-4 pb-6 bg-white">
-          <div className="max-w-3xl mx-auto">
+        {/* Input */}
+        <div className="px-4 md:px-8 py-4 pb-6 glass-card border-t border-white/60">
+          <div className={containerClass}>
             <PromptInput
-                placeholder="Type in English, தமிழ், සිංහල, or romanized…"
-                onSubmit={(text) => sendAgentMessage(id, text)}
-                onVoiceBlob={(blob) => sendVoiceMessage(id, blob)}
-              />
+              placeholder="Ask me anything — flowers, cakes, gifts..."
+              onSubmit={(text) => sendAgentMessage(id, text)}
+              onVoiceBlob={(blob) => sendVoiceMessage(id, blob)}
+            />
           </div>
         </div>
       </div>
 
-      <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} conversationId={id} />
+      {/* Inline cart panel (no overlay, expands from right) */}
+      <CartPanel
+        isOpen={isCartOpen}
+        onClose={() => setIsCartOpen(false)}
+        conversationId={id}
+      />
     </div>
   );
 };

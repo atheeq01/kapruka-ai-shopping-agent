@@ -12,19 +12,23 @@ export default {
       },
       colors: {
         kapruka: {
-          primary: '#4A148C',
-          purple: '#4B2187',
+          primary: '#FF1F8F',
+          purple: '#a855f7',
           orange: '#FF9800',
           green: '#10B981',
-          dark: '#1F2937',
-          surface: '#F9FAFB',
-          light: '#F4F0FA'
+          dark: '#1a1a2e',
+          surface: '#fdf4ff',
+          light: '#F4F0FA',
+          pink: '#FF1F8F',
         }
       },
       boxShadow: {
-        'glow': '0 0 40px -10px rgba(74, 20, 140, 0.2)',
-        'glow-lg': '0 0 60px -15px rgba(74, 20, 140, 0.3)',
-      }
+        'glow':    '0 0 40px -10px rgba(255, 31, 143, 0.25)',
+        'glow-lg': '0 0 60px -15px rgba(255, 31, 143, 0.4)',
+        'orb':     '0 25px 70px rgba(244, 114, 182, 0.55), 0 10px 30px rgba(200, 132, 252, 0.3)',
+        'card':    '0 4px 24px rgba(0, 0, 0, 0.06)',
+        'btn':     '0 4px 16px rgba(255, 0, 124, 0.45)',
+      },
     }
   },
   plugins: [],

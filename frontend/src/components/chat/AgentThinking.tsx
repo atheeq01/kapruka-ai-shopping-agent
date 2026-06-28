@@ -5,7 +5,6 @@ import type { AgentStep } from '../../store/cartStore';
 
 interface AgentThinkingProps {
   steps: AgentStep[];
-  /** When true the agent is still working — keep the glow + spinners alive. */
   active: boolean;
 }
 
@@ -24,13 +23,13 @@ export const AgentThinking: React.FC<AgentThinkingProps> = ({ steps, active }) =
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="relative mb-3 overflow-hidden rounded-2xl border border-violet-100/80 bg-gradient-to-br from-violet-50/70 via-white to-fuchsia-50/40 p-3.5"
+      className="relative mb-3 overflow-hidden rounded-2xl border border-pink-100/60 bg-gradient-to-br from-pink-50/60 via-white to-violet-50/40 p-3.5"
     >
-      {/* Sweeping sheen while the agent is actively working */}
+      {/* Sweeping sheen */}
       {active && (
         <motion.div
           aria-hidden
-          className="pointer-events-none absolute inset-0 -skew-x-12 bg-gradient-to-r from-transparent via-white/60 to-transparent"
+          className="pointer-events-none absolute inset-0 -skew-x-12 bg-gradient-to-r from-transparent via-white/55 to-transparent"
           initial={{ x: '-120%' }}
           animate={{ x: '120%' }}
           transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
@@ -46,15 +45,15 @@ export const AgentThinking: React.FC<AgentThinkingProps> = ({ steps, active }) =
               key={step.id}
               initial={{ opacity: 0, x: -8 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: i * 0.04 }}
+              transition={{ delay: i * 0.05 }}
               className="flex items-center gap-2.5"
             >
               <span
                 className={[
                   'flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors',
                   step.status === 'done'
-                    ? 'bg-kapruka-green/15 text-kapruka-green'
-                    : 'bg-violet-100 text-violet-600',
+                    ? 'bg-green-100 text-green-500'
+                    : 'bg-pink-100 text-pink-500',
                 ].join(' ')}
               >
                 {running ? (
@@ -65,7 +64,14 @@ export const AgentThinking: React.FC<AgentThinkingProps> = ({ steps, active }) =
               </span>
 
               {running ? (
-                <span className="bg-gradient-to-r from-violet-500 via-fuchsia-500 to-violet-500 bg-[length:200%_auto] bg-clip-text text-sm font-medium text-transparent animate-[shimmer_2s_linear_infinite]">
+                <span
+                  className="text-sm font-medium bg-clip-text text-transparent"
+                  style={{
+                    backgroundImage: 'linear-gradient(90deg, #ec4899, #a855f7, #ec4899)',
+                    backgroundSize: '200% auto',
+                    animation: 'shimmer 2s linear infinite',
+                  }}
+                >
                   {step.label}
                   <ThinkingDots />
                 </span>

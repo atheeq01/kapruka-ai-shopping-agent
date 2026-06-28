@@ -166,7 +166,8 @@ export const RecordingBar: React.FC<RecordingBarProps> = ({ onCancel, onSend }) 
           onClick={handleSend}
           whileHover={{ scale: 1.08 }}
           whileTap={{ scale: 0.92 }}
-          className="p-2 rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white shadow-md shadow-violet-300/50"
+          className="p-2 rounded-full text-white shadow-md shadow-pink-300/50"
+          style={{ background: 'linear-gradient(135deg, #ff3fa1, #ff007c)' }}
         >
           <Send size={16} />
         </motion.button>

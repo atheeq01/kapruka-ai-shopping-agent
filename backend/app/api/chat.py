@@ -4,8 +4,69 @@ from fastapi.responses import StreamingResponse
 from app.schemas.chat import ChatRequest, DetectLangRequest, DetectLangResponse, VoiceResponse
 from app.services.agent import process_chat
 from app.services.language import quick_detect, detect_language
+from app.mcp.client import mcp_client
 
 router = APIRouter()
+
+
+@router.get("/categories")
+async def list_categories():
+    """Fetches product categories from the Kapruka MCP kapruka_list_categories tool."""
+    try:
+        async with mcp_client.new_session() as session:
+            result = await session.call_tool(
+                "kapruka_list_categories",
+                arguments={"params": {"depth": 1, "response_format": "json"}},
+            )
+
+        # Extract text from MCP result
+        raw = ""
+        if hasattr(result, "content"):
+            parts = []
+            for item in result.content:
+                if hasattr(item, "text"):
+                    parts.append(item.text)
+            raw = "\n".join(parts)
+        else:
+            raw = str(result)
+
+        # Try to parse as JSON
+        try:
+            raw_stripped = raw.strip()
+            if raw_stripped.startswith("```"):
+                raw_stripped = raw_stripped.strip("`")
+                if raw_stripped.startswith("json"):
+                    raw_stripped = raw_stripped[4:].strip()
+            data = json.loads(raw_stripped)
+            if isinstance(data, list):
+                return {"categories": data}
+            elif isinstance(data, dict):
+                cats = data.get("categories") or data.get("items") or data.get("data") or []
+                return {"categories": cats if isinstance(cats, list) else []}
+        except Exception:
+            pass
+
+        # Return raw text for frontend to handle
+        return {"categories": [], "raw": raw}
+
+    except Exception as e:
+        print(f"[categories] MCP error: {e}")
+        # Curated fallback so the UI is never empty
+        return {
+            "categories": [
+                {"name": "Flowers",          "emoji": "🌸"},
+                {"name": "Birthday Cakes",   "emoji": "🎂"},
+                {"name": "Gifts",            "emoji": "🎁"},
+                {"name": "Fruit Baskets",    "emoji": "🍓"},
+                {"name": "Chocolates",       "emoji": "🍫"},
+                {"name": "Wine & Spirits",   "emoji": "🍷"},
+                {"name": "Jewellery",        "emoji": "💍"},
+                {"name": "Plants",           "emoji": "🌿"},
+                {"name": "Personalised",     "emoji": "✍️"},
+                {"name": "Kids & Toys",      "emoji": "🧸"},
+            ],
+            "fallback": True,
+        }
 
 
 @router.post("/chat")

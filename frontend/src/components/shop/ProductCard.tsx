@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Camera, Check, ExternalLink, ImageOff, Plus, ShoppingCart, Star, Users, X } from 'lucide-react';
+import { Camera, Check, ChevronLeft, ChevronRight, ImageOff, Plus, ShoppingCart, Star, Users, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { NormalizedProduct } from '../../lib/normalizeProduct';
 import { IcingInput, QtyStepper, SizePicker, useProductSelection } from './productSelection';
@@ -74,10 +74,31 @@ interface HoverPanelProps {
 const HoverPanel: React.FC<HoverPanelProps> = ({ product, onClose }) => {
   const sel = useProductSelection(product);
   const [imgError, setImgError] = useState(false);
+  const [activeImgIndex, setActiveImgIndex] = useState(0);
 
   const openProduct = () => {
     if (product.url) window.open(product.url, '_blank', 'noopener,noreferrer');
   };
+
+  const images = React.useMemo(() => {
+    if (product.images && product.images.length > 0) return product.images;
+    if (product.image) return [product.image];
+    return [];
+  }, [product.images, product.image]);
+
+  const handlePrevImage = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setActiveImgIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
+  };
+
+  const handleNextImage = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setActiveImgIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
+  };
+
+
+
+
 
   return (
     <motion.div
@@ -85,166 +106,208 @@ const HoverPanel: React.FC<HoverPanelProps> = ({ product, onClose }) => {
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.96, y: 6 }}
       transition={{ duration: 0.18, ease: 'easeOut' }}
-      className="flex overflow-hidden rounded-2xl bg-white shadow-2xl shadow-black/20 border border-gray-100"
-      style={{ width: 500 }}
+      className="flex overflow-hidden rounded-2xl bg-violet-50 shadow-2xl shadow-violet-950/15 border border-violet-100"
+      style={{ width: 520 }}
     >
-      {/* Left — image + name + price on gradient */}
+      {/* Left side: Product Image Showcase */}
       <div
-        className="relative flex w-44 shrink-0 flex-col justify-end overflow-hidden cursor-pointer"
-        style={{ background: 'linear-gradient(135deg, #5b21b6 0%, #7c3aed 40%, #a855f7 100%)' }}
+        className="relative flex w-48 shrink-0 flex-col items-center bg-gray-50/50 p-4 border-r border-gray-100 cursor-pointer"
         onClick={openProduct}
       >
-        {product.image && !imgError ? (
-          <img
-            src={product.image}
-            alt={product.name}
-            className="absolute inset-0 h-full w-full object-cover mix-blend-overlay opacity-60"
-            onError={() => setImgError(true)}
-          />
-        ) : null}
-        {/* Foreground product image (clean, no blend) */}
-        {product.image && !imgError ? (
-          <img
-            src={product.image}
-            alt={product.name}
-            className="relative z-10 w-full object-contain drop-shadow-2xl px-3 pt-6 pb-2"
-            style={{ maxHeight: 180 }}
-            onError={() => setImgError(true)}
-          />
-        ) : (
-          <div className="flex flex-1 items-center justify-center text-white/40 z-10">
-            <ImageOff size={32} />
-          </div>
-        )}
-        <div className="relative z-10 px-3 pb-4">
-          <p className="text-sm font-bold text-white leading-snug line-clamp-2">{product.name}</p>
-          <p className="mt-1 text-lg font-extrabold text-white drop-shadow">
-            Rs. {sel.price.toLocaleString()}
-          </p>
-          {product.category && (
-            <p className="text-[10px] text-white/70 uppercase tracking-wider mt-0.5">{product.category}</p>
+        <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-white border border-gray-100 flex items-center justify-center p-2 shadow-sm transition-transform duration-300 hover:scale-[1.02] group/img">
+          {images.length > 0 && !imgError ? (
+            <>
+              <img
+                src={images[activeImgIndex]}
+                alt={product.name}
+                className="h-full w-full object-contain"
+                onError={() => setImgError(true)}
+              />
+              
+              {/* Carousel arrows */}
+              {images.length > 1 && (
+                <>
+                  <button
+                    onClick={handlePrevImage}
+                    className="absolute left-1.5 top-1/2 -translate-y-1/2 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 border border-gray-100 text-gray-500 hover:text-gray-800 hover:bg-white shadow-sm hover:scale-105 active:scale-95 transition-all opacity-0 group-hover/img:opacity-100"
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+                  <button
+                    onClick={handleNextImage}
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 border border-gray-100 text-gray-500 hover:text-gray-800 hover:bg-white shadow-sm hover:scale-105 active:scale-95 transition-all opacity-0 group-hover/img:opacity-100"
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+                </>
+              )}
+            </>
+          ) : (
+            <div className="text-gray-300">
+              <ImageOff size={28} />
+            </div>
           )}
         </div>
+
+        {/* Carousel Pagination Dots */}
+        {images.length > 1 && (
+          <div className="flex items-center gap-1 mt-3">
+            {images.map((_, idx) => (
+              <div
+                key={idx}
+                className={cn(
+                  'h-1.5 rounded-full transition-all duration-300',
+                  idx === activeImgIndex ? 'w-3.5 bg-gray-500' : 'w-1.5 bg-gray-200'
+                )}
+              />
+            ))}
+          </div>
+        )}
+
+
+
+        {/* Category tag overlay */}
+        {product.category && (
+          <span className="absolute left-2.5 top-2.5 rounded-full bg-violet-100/80 backdrop-blur-sm px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-violet-700">
+            {product.category}
+          </span>
+        )}
       </div>
 
-      {/* Right — details */}
-      <div className="flex flex-1 flex-col p-4 overflow-y-auto" style={{ maxHeight: 380 }}>
-        {/* Header row */}
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <div className="min-w-0">
-            <h3 className="text-sm font-bold text-kapruka-dark leading-snug line-clamp-2">{product.name}</h3>
-            {product.category && (
-              <p className="text-[10px] text-gray-400 uppercase tracking-wider mt-0.5">{product.category}</p>
-            )}
+      {/* Right side: Product Actions and Details */}
+      <div className="flex flex-1 flex-col p-4">
+        {/* Top bestseller row */}
+        <div className="flex items-center justify-between">
+          <span className="text-[9px] font-bold tracking-widest text-pink-500 uppercase">
+            {product.rating && product.rating >= 4 ? 'Best Seller' : 'Kapruka Choice'}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="shrink-0 rounded-full p-1 text-violet-400 hover:bg-violet-100 hover:text-violet-600 transition-all active:scale-90"
+            >
+              <X size={14} />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="shrink-0 text-gray-300 hover:text-gray-500 transition-colors"
-          >
-            <X size={14} />
-          </button>
         </div>
 
-        {/* Rating */}
-        {product.rating != null && (
-          <div className="flex items-center gap-2 mb-3">
-            <StarRating rating={product.rating} />
-            {product.purchaseCount != null && (
-              <span className="flex items-center gap-0.5 text-[10px] text-gray-400">
-                <Users size={10} /> {product.purchaseCount.toLocaleString()} buyers
-              </span>
-            )}
+        {/* Title */}
+        <div className="min-w-0 mt-1">
+          <h3 className="text-base font-bold text-kapruka-dark leading-snug tracking-tight hover:text-violet-600 cursor-pointer" onClick={openProduct}>
+            {product.name}
+          </h3>
+        </div>
+
+        {/* Rating and buyers info */}
+        <div className="flex items-center gap-2 mt-1.5">
+          {product.rating != null && <StarRating rating={product.rating} size={11} />}
+          {product.purchaseCount != null && (
+            <span className="flex items-center gap-0.5 text-[10px] font-medium text-gray-400">
+              <Users size={10} /> {product.purchaseCount.toLocaleString()} buyers
+            </span>
+          )}
+        </div>
+
+        {/* Price */}
+        <div className="mt-2.5 flex items-baseline gap-1">
+          <span className="text-xs text-gray-400 font-medium">Rs.</span>
+          <span className="text-xl font-black text-gray-900 tracking-tight">
+            {sel.price.toLocaleString()}
+          </span>
+        </div>
+
+        {/* Divider */}
+        <div className="h-px bg-gray-100 my-3" />
+
+        {/* Summary Description Box */}
+        {product.description && (
+          <div className="mb-3.5 text-[11px] leading-relaxed text-gray-500 text-justify bg-gray-50/60 border border-gray-100 rounded-xl p-3">
+            {product.description}
           </div>
         )}
 
-        {/* Description */}
-        {(product.description || product.summary) && (
-          <p className="text-xs text-gray-500 leading-relaxed mb-3 line-clamp-3">
-            {product.description || product.summary}
-          </p>
-        )}
-
-        {/* Weight info */}
-        {product.weight && !sel.hasVariants && (
-          <p className="text-xs text-gray-400 mb-2">Net weight: {product.weight}</p>
-        )}
-
-        {/* Size / variants */}
+        {/* Options pickers if any */}
         {sel.hasVariants && (
-          <div className="mb-3">
-            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-              {product.weight ? 'Size / Weight' : 'Size'}
+          <div className="mb-3.5">
+            <p className="mb-1 text-[9px] font-bold uppercase tracking-wider text-gray-400">
+              Select {product.weight ? 'Size / Weight' : 'Size'}
             </p>
             <SizePicker variants={sel.variants} size={sel.size} onSelect={sel.setSize} />
           </div>
         )}
 
-        {/* Cake icing greeting */}
         {product.isCake && (
-          <div className="mb-3" onClick={(e) => e.stopPropagation()}>
+          <div className="mb-3.5" onClick={(e) => e.stopPropagation()}>
             <IcingInput value={sel.icing} onChange={sel.setIcing} />
           </div>
         )}
 
-        {/* Personalised / photo gift note */}
         {product.needsPersonalization && (
-          <div className="mb-3 flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50/70 px-2.5 py-2">
+          <div className="mb-3.5 flex items-start gap-1.5 rounded-xl border border-amber-200 bg-amber-50/50 px-2.5 py-2">
             <Camera size={13} className="mt-0.5 shrink-0 text-amber-500" />
-            <p className="text-[10px] leading-relaxed text-amber-800">
-              Photo &amp; custom text are added on the Kapruka product page.
+            <p className="text-[9px] leading-relaxed text-amber-800">
+              Personalized item: Add your photo &amp; message on Kapruka during checkout.
             </p>
           </div>
         )}
 
-        {/* Stock */}
-        <p className={cn('text-xs mb-3', sel.inStock ? 'text-kapruka-green' : 'text-gray-400')}>
-          {sel.inStock ? '● In Stock' : 'Out of Stock'}
-        </p>
+        {/* Divider */}
+        <div className="h-px bg-gray-100 my-3" />
 
-        {/* Price + qty */}
-        <div className="flex items-center gap-3 mb-3">
-          <span className="text-xl font-extrabold text-violet-700">
-            Rs. {sel.price.toLocaleString()}
-          </span>
-          {sel.hasVariants && <QtyStepper qty={sel.qty} setQty={sel.setQty} />}
-        </div>
+        {/* Quantity and Actions */}
+        <div className="mt-auto">
+          {/* Item Quantity */}
+          <div className="mb-3">
+            <p className="mb-1.5 text-[10px] font-semibold text-gray-500">Item Quantity</p>
+            <QtyStepper qty={sel.qty} setQty={sel.setQty} />
+          </div>
 
-        {/* Actions */}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); (sel.hasVariants || product.isCake) ? sel.add() : sel.toggleSimple(); }}
-            disabled={!sel.inStock}
-            className={cn(
-              'flex flex-1 items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-bold transition-all active:scale-95',
-              'disabled:cursor-not-allowed disabled:opacity-40',
-              sel.isSelected
-                ? 'bg-kapruka-orange text-white hover:bg-kapruka-orange/90'
-                : 'bg-violet-600 text-white hover:bg-violet-700',
-            )}
-          >
-            {sel.isSelected ? <Check size={13} strokeWidth={3} /> : <ShoppingCart size={13} />}
-            {sel.isSelected ? 'In Cart' : 'Add to Cart'}
-          </button>
-
-          {product.url && (
+          <div className="space-y-2">
+            {/* Primary Action: Add / Update Cart */}
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); openProduct(); }}
-              className="flex items-center gap-1 rounded-xl border border-gray-200 px-3 py-2.5 text-xs font-semibold text-gray-500 hover:border-violet-300 hover:text-violet-600 transition-colors shrink-0"
-              title="View on Kapruka"
+              onClick={(e) => { e.stopPropagation(); (sel.hasVariants || product.isCake) ? sel.add() : sel.toggleSimple(); }}
+              disabled={!sel.inStock}
+              className={cn(
+                'flex w-full items-center justify-center gap-1.5 rounded-xl py-3 text-xs font-bold transition-all active:scale-95 shadow-md shadow-violet-100',
+                'disabled:cursor-not-allowed disabled:opacity-40',
+                sel.isSelected
+                  ? 'bg-kapruka-orange text-white hover:bg-kapruka-orange/90'
+                  : 'bg-violet-600 text-white hover:bg-violet-700',
+              )}
             >
-              <ExternalLink size={12} /> View
+              {sel.isSelected ? <Check size={13} strokeWidth={3} /> : <ShoppingCart size={13} />}
+              {sel.isSelected ? 'In Cart (Update)' : 'Add to Cart'}
             </button>
-          )}
+
+            {/* Secondary Action: Buy Now */}
+            {product.url && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); openProduct(); }}
+                className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-gray-200 py-3 text-xs font-bold text-gray-700 bg-gray-50/50 hover:bg-gray-50 hover:border-gray-300 transition-all active:scale-95"
+              >
+                Buy Now (View on Kapruka)
+              </button>
+            )}
+          </div>
         </div>
 
-        {sel.hasVariants && sel.qty > 1 && (
-          <p className="mt-2 text-[10px] text-gray-400">
-            Total for {sel.qty}: <span className="font-semibold text-kapruka-dark">Rs. {(sel.price * sel.qty).toLocaleString()}</span>
-          </p>
-        )}
+        {/* Shipping details */}
+        <div className="mt-4 pt-3 border-t border-gray-50">
+          <p className="text-[9px] text-gray-400 font-semibold uppercase tracking-wider mb-1.5">Shipping &amp; Delivery</p>
+          <ul className="text-[9.5px] text-gray-400 space-y-1">
+            <li className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+              Expected delivery: Same-day / Next-day in Colombo &amp; suburbs.
+            </li>
+            <li className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+              Secure payments with international credit/debit cards.
+            </li>
+          </ul>
+        </div>
       </div>
     </motion.div>
   );
@@ -255,7 +318,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index, view }
   const [hovered, setHovered] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const [panelStyle, setPanelStyle] = useState<React.CSSProperties>({});
-  const hideTimer = useRef<ReturnType<typeof setTimeout>>();
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const openProduct = () => {
     if (product.url) window.open(product.url, '_blank', 'noopener,noreferrer');
@@ -265,13 +328,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index, view }
     clearTimeout(hideTimer.current);
     if (!cardRef.current) return;
     const rect = cardRef.current.getBoundingClientRect();
-    const panelW = 500;
-    const panelH = 380;
+    const panelW = 520;
+    const panelH = 430;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
-    let left = rect.right + 10;
-    if (left + panelW > vw - 12) left = rect.left - panelW - 10;
+    let left = rect.right + 4;
+    if (left + panelW > vw - 12) left = rect.left - panelW - 4;
     if (left < 12) left = 12;
 
     let top = rect.top;
@@ -282,7 +345,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index, view }
   };
 
   const hidePanel = () => {
-    hideTimer.current = setTimeout(() => setHovered(false), 130);
+    hideTimer.current = setTimeout(() => setHovered(false), 300);
   };
 
   if (view === 'list') {
@@ -349,9 +412,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index, view }
         onMouseLeave={hidePanel}
         onClick={openProduct}
         className={cn(
-          'group relative flex flex-col bg-white transition-shadow duration-300 hover:z-10 hover:shadow-xl hover:shadow-violet-200/50',
+          'group relative flex flex-col bg-white transition-all duration-300 rounded-2xl border border-gray-100 overflow-hidden hover:shadow-lg hover:shadow-violet-100/80 hover:-translate-y-1',
           product.url && 'cursor-pointer',
-          sel.isSelected && 'ring-2 ring-inset ring-kapruka-orange',
+          sel.isSelected ? 'ring-2 ring-inset ring-kapruka-orange' : '',
         )}
       >
         <div className="relative aspect-[4/5] overflow-hidden bg-gray-100">
@@ -445,15 +508,17 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index, view }
       </motion.div>
 
       {/* Hover detail panel rendered at document.body to escape overflow:hidden */}
-      {hovered && createPortal(
+      {createPortal(
         <AnimatePresence>
-          <div
-            style={{ position: 'fixed', zIndex: 9999, ...panelStyle }}
-            onMouseEnter={() => clearTimeout(hideTimer.current)}
-            onMouseLeave={hidePanel}
-          >
-            <HoverPanel product={product} onClose={() => setHovered(false)} />
-          </div>
+          {hovered && (
+            <div
+              style={{ position: 'fixed', zIndex: 9999, ...panelStyle }}
+              onMouseEnter={() => clearTimeout(hideTimer.current)}
+              onMouseLeave={hidePanel}
+            >
+              <HoverPanel product={product} onClose={() => setHovered(false)} />
+            </div>
+          )}
         </AnimatePresence>,
         document.body,
       )}

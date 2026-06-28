@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useId } from 'react';
 import ReactDOM from 'react-dom';
 import { ChevronDown, Search, X } from 'lucide-react';
 
@@ -17,6 +17,8 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   placeholder = 'Select...',
   className = '',
 }) => {
+  const uid = useId();
+  const portalId = `searchable-select-${uid}`;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
@@ -69,7 +71,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
     const handler = (e: MouseEvent) => {
       const target = e.target as Node;
       if (buttonRef.current?.contains(target)) return;
-      const dropdown = document.getElementById('searchable-select-portal');
+      const dropdown = document.getElementById(portalId);
       if (dropdown?.contains(target)) return;
       setOpen(false);
       setQuery('');
@@ -91,7 +93,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   };
 
   const dropdown = open ? (
-    <div id="searchable-select-portal" style={dropdownStyle} className="bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden">
+    <div id={portalId} style={dropdownStyle} className="bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden">
       <div className="p-2 border-b border-gray-100 flex items-center gap-2">
         <Search size={14} className="text-gray-400 shrink-0" />
         <input
@@ -134,7 +136,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
         ref={buttonRef}
         type="button"
         onClick={() => (open ? (setOpen(false), setQuery('')) : openDropdown())}
-        className="w-full flex items-center justify-between border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white hover:border-kapruka-orange/50 focus:ring-2 focus:ring-kapruka-orange/20 focus:border-kapruka-orange outline-none text-left transition-colors"
+        className="w-full flex items-center justify-between border border-pink-100 rounded-xl px-4 py-2.5 text-sm bg-white/90 hover:border-pink-300 focus:ring-2 focus:ring-pink-300/30 focus:border-pink-400 outline-none text-left transition-colors"
       >
         <span className={`truncate ${value ? 'text-gray-900' : 'text-gray-400'}`}>
           {value || placeholder}
