@@ -1,0 +1,209 @@
+name: Deploy (backend → Cloud Run, frontend → Firebase Hosting)
+
+# Builds and deploys only what changed:
+#   - backend/**   → container image to Artifact Registry, then Cloud Run
+#   - frontend/**  → static Vite build, then Firebase Hosting (CDN)
+#
+# Fully automatic — no manual URL wiring:
+#   - Backend CORS origins are derived from the project id (PROJECT.web.app /
+#     PROJECT.firebaseapp.com), so the backend self-configures.
+#   - The frontend asks Cloud Run for the live backend URL at build time, so it
+#     always points at the deployed API. Both can be overridden (var CORS_ORIGINS /
+#     secret VITE_API_BASE_URL win if set) for custom domains.
+#
+# Auth is KEYLESS via Workload Identity Federation — no service-account JSON key,
+# no email/project hardcoded here. Sensitive values come from GitHub secrets,
+# non-secret config from repo variables, the runtime API key from Secret Manager.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+# Needed for Workload Identity Federation (OIDC token) + repo checkout.
+permissions:
+  contents: read
+  id-token: write
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Detect which part of the monorepo changed ────────────────────────────────
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/deploy.yml'
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/deploy.yml'
+
+  # ── Gate: backend tests (smoke + unit + api) ─────────────────────────────────
+  # Must pass before the backend can deploy. External services are mocked, so this
+  # needs no GCP/Gemini/MCP credentials.
+  test-backend:
+    needs: changes
+    if: ${{ needs.changes.outputs.backend == 'true' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - name: Install deps
+        run: pip install -r requirements-dev.txt
+      - name: Smoke tests (fail fast)
+        run: python -m pytest -m smoke
+      - name: Unit + API tests
+        run: python -m pytest -m "unit or api"
+
+  # ── Gate: frontend lint + typecheck ──────────────────────────────────────────
+  check-frontend:
+    needs: changes
+    if: ${{ needs.changes.outputs.frontend == 'true' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Lint (non-blocking — clear the existing backlog, then flip to blocking)
+        continue-on-error: true
+        run: npm run lint
+      - name: Typecheck (blocking gate)
+        run: npx tsc -b
+
+  # ── Backend → Cloud Run ──────────────────────────────────────────────────────
+  deploy-backend:
+    needs: [changes, test-backend]
+    if: ${{ needs.changes.outputs.backend == 'true' && needs.test-backend.result == 'success' }}
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ vars.GAR_REPOSITORY }}/backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (keyless / WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ vars.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build & push image
+        run: |
+          docker build -t "$IMAGE:${{ github.sha }}" -t "$IMAGE:latest" ./backend
+          docker push "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:latest"
+
+      - name: Compute CORS origins (Firebase Hosting URLs are deterministic)
+        run: |
+          if [ -n "${{ vars.CORS_ORIGINS }}" ]; then
+            echo "CORS_ORIGINS=${{ vars.CORS_ORIGINS }}" >> "$GITHUB_ENV"
+          else
+            P="${{ secrets.GCP_PROJECT_ID }}"
+            echo "CORS_ORIGINS=https://${P}.web.app,https://${P}.firebaseapp.com" >> "$GITHUB_ENV"
+          fi
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "${{ vars.CLOUD_RUN_SERVICE }}" \
+            --image "$IMAGE:${{ github.sha }}" \
+            --region "${{ vars.GCP_REGION }}" \
+            --platform managed \
+            --allow-unauthenticated \
+            --port 8000 \
+            --cpu 1 --memory 512Mi \
+            --min-instances 0 --max-instances 5 \
+            --set-env-vars "GEMINI_MODEL=${{ vars.GEMINI_MODEL }},GEMINI_FALLBACK_MODEL=${{ vars.GEMINI_FALLBACK_MODEL }},GEMINI_AUDIO_MODEL=${{ vars.GEMINI_AUDIO_MODEL }},GEMINI_CLASSIFY_MODEL=${{ vars.GEMINI_CLASSIFY_MODEL }},KAPRUKA_MCP_URL=${{ secrets.KAPRUKA_MCP_URL }},CORS_ORIGINS=${CORS_ORIGINS}" \
+            --set-secrets "GEMINI_API_KEY=GEMINI_API_KEY:latest"
+
+      - name: Show service URL
+        run: gcloud run services describe "${{ vars.CLOUD_RUN_SERVICE }}" --region "${{ vars.GCP_REGION }}" --format='value(status.url)'
+
+  # ── Frontend → Firebase Hosting ──────────────────────────────────────────────
+  # `needs: deploy-backend` so that on a combined push the frontend builds AFTER
+  # the new backend is live. The `if` lets it still run when only the frontend
+  # changed (backend job skipped) — the backend URL is read live from Cloud Run.
+  deploy-frontend:
+    needs: [changes, check-frontend, deploy-backend]
+    if: ${{ always() && needs.changes.outputs.frontend == 'true' && needs.check-frontend.result == 'success' && (needs.deploy-backend.result == 'success' || needs.deploy-backend.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (keyless / WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Resolve backend URL from Cloud Run (or override)
+        run: |
+          if [ -n "${{ secrets.VITE_API_BASE_URL }}" ]; then
+            echo "VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }}" >> "$GITHUB_ENV"
+          else
+            URL=$(gcloud run services describe "${{ vars.CLOUD_RUN_SERVICE }}" \
+              --region "${{ vars.GCP_REGION }}" --format='value(status.url)')
+            if [ -z "$URL" ]; then
+              echo "::error::Could not resolve Cloud Run URL for ${{ vars.CLOUD_RUN_SERVICE }}. Deploy the backend once first."
+              exit 1
+            fi
+            echo "VITE_API_BASE_URL=$URL" >> "$GITHUB_ENV"
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build (Vite bakes these env vars in at build time)
+        env:
+          VITE_API_BASE_URL: ${{ env.VITE_API_BASE_URL }}
+          VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+        run: npm run build
+
+      - name: Deploy to Firebase Hosting
+        # firebase-tools picks up Application Default Credentials exported by the
+        # auth step above (GOOGLE_APPLICATION_CREDENTIALS) — no service-account JSON.
+        run: npx --yes firebase-tools@latest deploy --only hosting --project "${{ secrets.GCP_PROJECT_ID }}" --non-interactive

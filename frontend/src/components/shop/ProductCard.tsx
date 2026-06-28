@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Camera, Check, ChevronLeft, ChevronRight, ImageOff, Plus, ShoppingCart, Star, Users, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { NormalizedProduct } from '../../lib/normalizeProduct';
+import { easeOutExpo } from '../../lib/motion';
 import { IcingInput, QtyStepper, SizePicker, useProductSelection } from './productSelection';
 
 interface ProductCardProps {
@@ -353,7 +354,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index, view }
       <motion.div
         initial={{ opacity: 0, x: -8 }}
         animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.25, delay: index * 0.04 }}
+        transition={{ duration: 0.4, delay: index * 0.04, ease: easeOutExpo }}
         className="flex flex-wrap items-center gap-4 p-3 transition-colors hover:bg-violet-50/40"
       >
         <div
@@ -406,7 +407,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index, view }
         ref={cardRef}
         initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, delay: index * 0.05, ease: 'easeOut' }}
+        transition={{ duration: 0.45, delay: index * 0.05, ease: easeOutExpo }}
         whileHover={{ y: -4 }}
         onMouseEnter={showPanel}
         onMouseLeave={hidePanel}

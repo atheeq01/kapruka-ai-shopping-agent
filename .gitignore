@@ -24,3 +24,7 @@ build/
 # Models
 models
 /img.png
+/.agents/
+
+# Claude Code workspace artifacts
+skills-lock.json

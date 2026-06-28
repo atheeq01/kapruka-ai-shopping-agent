@@ -11,6 +11,14 @@ import { useAppStore } from '../store/cartStore';
 import { sendAgentMessage, sendVoiceMessage } from '../lib/agentStream';
 import { cn } from '../lib/utils';
 
+/* Static, prop-less decoration — hoisted so it isn't rebuilt each render (rendering-hoist-jsx). */
+const AmbientBlobs = (
+  <div className="absolute inset-0 pointer-events-none overflow-hidden">
+    <div className="absolute -top-24 -left-16 h-80 w-80 rounded-full bg-pink-300/10 blur-3xl" />
+    <div className="absolute bottom-0 right-0 h-80 w-80 rounded-full bg-violet-300/10 blur-3xl" />
+  </div>
+);
+
 export const ChatPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -49,10 +57,7 @@ export const ChatPage: React.FC = () => {
   return (
     <div className="flex h-screen overflow-hidden bg-app relative">
       {/* Ambient blobs */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute -top-24 -left-16 h-80 w-80 rounded-full bg-pink-300/10 blur-3xl" />
-        <div className="absolute bottom-0 right-0 h-80 w-80 rounded-full bg-violet-300/10 blur-3xl" />
-      </div>
+      {AmbientBlobs}
 
       {/* Sidebar */}
       <Sidebar onPanelChange={setIsSidebarOpen} />
@@ -94,7 +99,7 @@ export const ChatPage: React.FC = () => {
         <div ref={scrollRef} className="flex-1 overflow-y-auto chat-bg px-4 md:px-8 py-6">
           <div className={containerClass}>
             {conversation.messages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} />
+              <MessageBubble key={msg.id} message={msg} conversationId={id} />
             ))}
             {isTyping && <TypingIndicator />}
           </div>

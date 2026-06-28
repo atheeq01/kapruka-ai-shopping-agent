@@ -181,6 +181,41 @@ def _force_json_format(name: str, args: dict) -> dict:
 # emits a `cart_add` SSE event the frontend applies to the React cart store.
 ADD_TO_CART_TOOL = "add_to_cart"
 
+# Like add_to_cart, this is a synthetic, browser-side tool. Calling it tells the
+# frontend to render the rich in-chat checkout form (city dropdown, Google-Maps
+# address search + map pin, recipient/sender/gift fields) instead of the agent
+# asking for every delivery detail in plain text. The loop intercepts it and
+# emits a `checkout_form` SSE event; the form's "Place Order" button then sends
+# the agent a message with all the details to pass to kapruka_create_order.
+SHOW_CHECKOUT_FORM_TOOL = "show_checkout_form"
+
+
+def _local_checkout_tool() -> types.Tool:
+    return types.Tool(function_declarations=[
+        types.FunctionDeclaration(
+            name=SHOW_CHECKOUT_FORM_TOOL,
+            description=(
+                "Show the customer the in-chat checkout form so they can fill in their delivery "
+                "details (recipient name + phone, delivery city, address with an interactive map "
+                "pin, date, sender name, anonymity and gift-card message) using easy dropdowns and "
+                "an address search — instead of typing them out one by one. Call this as soon as the "
+                "customer wants to place an order / proceed to checkout / pay and there is at least "
+                "one item in their cart. After calling it, DO NOT ask for the address, recipient or "
+                "other delivery fields in text — the form collects them. Just tell them the form is "
+                "ready below."
+            ),
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "reason": types.Schema(
+                        type=types.Type.STRING,
+                        description="Optional short note on why you're showing checkout now.",
+                    ),
+                },
+            ),
+        )
+    ])
+
 
 def _local_cart_tool() -> types.Tool:
     item = types.Schema(
@@ -259,6 +294,8 @@ def _tool_label(name: str, args: dict) -> str:
         if len(items) > 1:
             return f"Adding {len(items)} items to your cart"
         return "Updating your cart"
+    if name == SHOW_CHECKOUT_FORM_TOOL:
+        return "Opening the checkout form"
     if name == "kapruka_search_products":
         query = args.get("query") or args.get("q") or args.get("keyword")
         return f'Searching the catalog for "{query}"' if query else "Searching the Kapruka catalog"
@@ -367,6 +404,7 @@ async def process_chat(
     # act on "add the second one to my cart" style references.
     all_tools = list(gemini_tools)
     all_tools.append(_local_cart_tool())
+    all_tools.append(_local_checkout_tool())
 
     config = types.GenerateContentConfig(
         system_instruction=system_prompt,
@@ -462,6 +500,25 @@ async def process_chat(
                 "args": args,
                 "label": _tool_label(fc.name, args),
             })
+
+            # ── Local checkout-form tool: handled here, never sent to MCP ───────
+            if fc.name == SHOW_CHECKOUT_FORM_TOOL:
+                yield _sse({"type": "checkout_form"})
+                output = (
+                    "The in-chat checkout form is now shown to the customer. It collects the "
+                    "recipient name + phone, delivery city, address (with a map pin), date, sender "
+                    "name, anonymity choice and gift-card message. Do NOT ask for these details in "
+                    "text — when the customer taps 'Place Order', you'll receive a message with all "
+                    "of them to pass to kapruka_create_order. Just warmly let them know the form is "
+                    "ready below for them to fill in."
+                )
+                yield _sse({"type": "tool_result", "name": fc.name, "data": output})
+                tool_response_parts.append(
+                    types.Part(function_response=types.FunctionResponse(
+                        name=fc.name, response={"output": output},
+                    ))
+                )
+                continue
 
             # ── Local cart tool: handled here, never sent to MCP ────────────────
             if fc.name == ADD_TO_CART_TOOL:

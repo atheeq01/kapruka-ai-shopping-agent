@@ -1,0 +1,10 @@
+# Never bake local secrets or cruft into the image (Dockerfile uses `COPY . .`).
+.env
+.env.*
+__pycache__/
+*.py[cod]
+.pytest_cache/
+tests/
+.venv/
+venv/
+*.md

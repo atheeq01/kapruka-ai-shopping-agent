@@ -35,6 +35,7 @@ export interface ChatMessage {
   productDetail?: any;              // a single looked-up product (with size variants)
   order?: Record<string, unknown>;  // structured order tracking result
   orderConfirmation?: Record<string, unknown>; // full submitted order (create_order)
+  checkoutForm?: { items: CartItem[] }; // in-chat checkout form the agent requested
   isProcessingVoice?: boolean;      // true while audio is uploading/transcribing
   timestamp: number;
 }

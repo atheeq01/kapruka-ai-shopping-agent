@@ -11,6 +11,21 @@ interface VoiceBubbleProps {
   onRetry?: () => void;
 }
 
+/**
+ * Static waveform shape + per-bar animation jitter, hoisted to module scope.
+ * Previously these used Math.random() inside render, so the waveform pulsed to
+ * different heights/speeds on every re-render. Pre-computing deterministic
+ * values keeps the animation stable (rendering-hydration-no-flicker) and avoids
+ * rebuilding the array each render (rerender-memo-with-default-value).
+ */
+const BAR_HEIGHTS = [0.3, 0.6, 0.9, 0.5, 0.8, 0.4, 0.7, 0.95, 0.6, 0.4,
+                     0.8, 0.5, 0.9, 0.3, 0.7, 0.6, 0.4, 0.85, 0.5, 0.3];
+const BAR_JITTER = BAR_HEIGHTS.map((h, i) => ({
+  // Deterministic "random-looking" peak + duration derived from the index.
+  peak: Math.max(4, h * 24 * (0.45 + ((i * 37) % 50) / 100)),
+  duration: 0.4 + ((i * 53) % 40) / 100,
+}));
+
 export const VoiceBubble: React.FC<VoiceBubbleProps> = ({
   audioUrl,
   transcript,
@@ -68,9 +83,6 @@ export const VoiceBubble: React.FC<VoiceBubbleProps> = ({
 
   const progress = duration > 0 ? elapsed / duration : 0;
 
-  const BAR_HEIGHTS = [0.3, 0.6, 0.9, 0.5, 0.8, 0.4, 0.7, 0.95, 0.6, 0.4,
-                       0.8, 0.5, 0.9, 0.3, 0.7, 0.6, 0.4, 0.85, 0.5, 0.3];
-
   if (failed) {
     return (
       <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-2xl rounded-tr-md px-4 py-3">
@@ -104,22 +116,21 @@ export const VoiceBubble: React.FC<VoiceBubbleProps> = ({
           <div className="flex items-center gap-[2px] flex-1 h-8">
             {BAR_HEIGHTS.map((h, i) => {
               const played = i / BAR_HEIGHTS.length < progress;
+              const rest = `${h * 24}px`;
               return (
                 <motion.div
                   key={i}
                   className={`rounded-full w-[3px] ${played || isPlaying ? 'bg-white' : 'bg-white/40'}`}
                   animate={{
-                    height: isPlaying
-                      ? [`${h * 24}px`, `${Math.max(4, h * 24 * (0.4 + Math.random() * 0.6))}px`, `${h * 24}px`]
-                      : `${h * 24}px`,
+                    height: isPlaying ? [rest, `${BAR_JITTER[i].peak}px`, rest] : rest,
                   }}
                   transition={isPlaying ? {
                     repeat: Infinity,
-                    duration: 0.4 + Math.random() * 0.4,
+                    duration: BAR_JITTER[i].duration,
                     delay: i * 0.03,
                     ease: 'easeInOut',
                   } : { duration: 0.2 }}
-                  style={{ height: `${h * 24}px` }}
+                  style={{ height: rest }}
                 />
               );
             })}

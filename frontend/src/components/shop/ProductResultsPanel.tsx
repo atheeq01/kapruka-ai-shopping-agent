@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, LayoutGrid, List as ListIcon, Package } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { normalizeProduct } from '../../lib/normalizeProduct';
+import { easeOutExpo } from '../../lib/motion';
 import { ProductCard } from './ProductCard';
 
 type SortOption = 'relevance' | 'price_asc' | 'price_desc';
@@ -42,10 +43,10 @@ export const ProductResultsPanel: React.FC<ProductResultsPanelProps> = ({ produc
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 28 }}
-      className="my-3 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: easeOutExpo }}
+      className="my-3 overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-[0_1px_2px_rgba(17,12,46,0.04),0_8px_28px_-12px_rgba(124,58,237,0.18)]"
     >
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 bg-gradient-to-r from-violet-50/60 to-transparent px-4 py-3">
         <div className="flex min-w-0 items-center gap-2">

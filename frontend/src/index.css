@@ -135,20 +135,34 @@
     transform: translateY(-2px);
   }
 
-  /* ── User chat bubble ───── */
+  /* ── User chat bubble ─────
+     Compact, professional. Softer brand gradient with a restrained shadow so
+     it reads as a refined message chip rather than a glowing neon block. */
   .bubble-user {
-    background: linear-gradient(135deg, #ff3fa1 0%, #ff007c 100%);
-    box-shadow: 0 4px 20px rgba(255, 0, 124, 0.32);
+    background: linear-gradient(135deg, #ff4da6 0%, #f5097a 100%);
+    box-shadow: 0 1px 2px rgba(245, 9, 122, 0.18), 0 4px 14px -4px rgba(245, 9, 122, 0.30);
     color: white;
+    letter-spacing: -0.005em;
   }
 
-  /* ── AI chat bubble ───── */
+  /* ── AI chat bubble ─────
+     Clean solid white surface with a hairline border and a soft, layered
+     shadow — matches the production-grade card look in the reference. */
   .bubble-ai {
-    background: rgba(255, 255, 255, 0.9);
-    border: 1px solid rgba(255, 255, 255, 0.85);
-    backdrop-filter: blur(12px);
-    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.055);
-    color: #1a1a2e;
+    background: #ffffff;
+    border: 1px solid rgba(124, 58, 237, 0.08);
+    box-shadow: 0 1px 2px rgba(17, 12, 46, 0.04), 0 6px 20px -10px rgba(124, 58, 237, 0.16);
+    color: #1f1f33;
+    letter-spacing: -0.005em;
+  }
+
+  /* ── Per-message render containment ─────
+     Skip layout/paint for off-screen messages in long conversations. The `auto`
+     keyword on contain-intrinsic-size makes the browser remember each message's
+     real rendered height, so scrolling past tall product grids doesn't jump. */
+  .chat-msg {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 64px;
   }
 
   /* ── Chat message area dotted background ───── */

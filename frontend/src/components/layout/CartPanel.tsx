@@ -1,12 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Minus, Plus, ShoppingBag, ArrowLeft, Lock, Package, ChevronDown, Sparkles, Loader2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { X, Minus, Plus, ShoppingBag, ArrowLeft, Lock, Package, ChevronDown, Check } from 'lucide-react';
 import { useAppStore } from '../../store/cartStore';
-import { sendAgentMessage } from '../../lib/agentStream';
-import { writeGiftMessage } from '../../lib/api';
-import { SearchableSelect } from '../ui/SearchableSelect';
-import { SRI_LANKA_CITIES, LOCATION_TYPES } from '../../lib/sriLankaCities';
+import { CheckoutFields } from '../shop/CheckoutFields';
+import { useCheckoutForm } from '../../lib/useCheckoutForm';
 
 interface CartPanelProps {
   isOpen: boolean;
@@ -16,104 +13,73 @@ interface CartPanelProps {
 
 type Step = 'cart' | 'checkout';
 
-const inputCls =
-  'w-full border border-pink-100 rounded-xl px-3 py-2 text-sm placeholder:text-gray-400 focus:ring-2 focus:ring-pink-300/30 focus:border-pink-400 outline-none transition-colors bg-white/90';
-
-const Field: React.FC<{ label: string; required?: boolean; children: React.ReactNode }> = ({
-  label, required, children,
+const CheckBox: React.FC<{ checked: boolean; onChange: () => void; label?: string }> = ({
+  checked, onChange, label,
 }) => (
-  <div>
-    <label className="mb-1 block text-xs font-semibold text-gray-500">
-      {label}{required && <span className="text-pink-500 ml-0.5">*</span>}
-    </label>
-    {children}
-  </div>
+  <button
+    type="button"
+    role="checkbox"
+    aria-checked={checked}
+    aria-label={label}
+    onClick={onChange}
+    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all active:scale-90 ${
+      checked
+        ? 'border-pink-500 bg-gradient-to-br from-pink-500 to-fuchsia-500 text-white shadow-sm'
+        : 'border-gray-300 bg-white text-transparent hover:border-pink-400'
+    }`}
+  >
+    <Check size={13} strokeWidth={3} />
+  </button>
 );
 
 export const CartPanel: React.FC<CartPanelProps> = ({ isOpen, onClose, conversationId }) => {
-  const navigate = useNavigate();
   const cart          = useAppStore((s) => s.cart);
   const removeFromCart= useAppStore((s) => s.removeFromCart);
   const updateQuantity= useAppStore((s) => s.updateQuantity);
-  const createConversation = useAppStore((s) => s.createConversation);
 
   const [step, setStep]           = useState<Step>('cart');
   const [summaryOpen, setSummaryOpen] = useState(false);
-  const [deliveryCity, setDeliveryCity]   = useState('');
-  const [locationType, setLocationType]   = useState('');
-  const [deliveryAddress, setDeliveryAddress] = useState('');
-  const [deliveryDate, setDeliveryDate]   = useState('');
-  const [instructions, setInstructions]   = useState('');
-  const [recipientName, setRecipientName] = useState('');
-  const [recipientPhone, setRecipientPhone] = useState('');
-  const [senderName, setSenderName]       = useState('');
-  const [anonymous, setAnonymous]         = useState(false);
-  const [giftMessage, setGiftMessage]     = useState('');
-  const [isSubmitting, setIsSubmitting]   = useState(false);
-  const [draftingMsg, setDraftingMsg]     = useState(false);
-  const languagePreference = useAppStore((s) => s.languagePreference);
+  // Track *deselected* ids (default: everything selected). This way a newly
+  // added cart item is automatically included without any reconcile guesswork.
+  const [deselectedIds, setDeselectedIds] = useState<Set<string>>(() => new Set());
 
-  const todayISO    = new Date().toISOString().slice(0, 10);
-  const totalAmount = cart.reduce((acc, i) => acc + (i.price || 0) * i.quantity, 0);
+  // Prune ids that have left the cart so they don't linger in the deselected set.
+  useEffect(() => {
+    setDeselectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const cartIds = new Set(cart.map((i) => i.product_id));
+      const next = new Set([...prev].filter((id) => cartIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [cart]);
 
-  const handleDraftGiftMessage = async () => {
-    setDraftingMsg(true);
-    try {
-      const message = await writeGiftMessage({
-        recipient_name: recipientName || undefined,
-        sender_name: anonymous ? undefined : (senderName || undefined),
-        anonymous,
-        items: cart.map((i) => i.name).filter(Boolean) as string[],
-        language: languagePreference,
-      });
-      if (message) setGiftMessage(message);
-    } catch {
-      alert("Sorry — couldn't draft a message just now. Please try again.");
-    } finally {
-      setDraftingMsg(false);
-    }
-  };
+  const isSelected = (id: string) => !deselectedIds.has(id);
+  const selectedCart = useMemo(
+    () => cart.filter((i) => !deselectedIds.has(i.product_id)),
+    [cart, deselectedIds],
+  );
+  const selectedCount = selectedCart.length;
+  const allSelected = cart.length > 0 && deselectedIds.size === 0;
+
+  const toggleItem = (id: string) =>
+    setDeselectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  const toggleAll = () =>
+    setDeselectedIds(allSelected ? new Set(cart.map((i) => i.product_id)) : new Set());
 
   const resetAndClose = () => { setStep('cart'); onClose(); };
 
-  const handlePlaceOrder = async () => {
-    if (!deliveryCity || !deliveryAddress || !deliveryDate || !recipientName || !recipientPhone) {
-      alert('Please fill in all required fields (marked *).');
-      return;
-    }
-    if (!anonymous && !senderName) {
-      alert('Please enter your name, or tick "Send anonymously".');
-      return;
-    }
-    const itemLines = cart.map((i) =>
-      `- ${i.name ?? i.product_id} (id: ${i.product_id}) × ${i.quantity}` +
-      (i.icing_text ? ` — icing: "${i.icing_text}"` : '')
-    ).join('\n');
-
-    const payload = `Please create an order for the following cart. Use exactly these details — do not change or omit any of them.
-
-Items:
-${itemLines}
-
-Recipient name: ${recipientName}
-Recipient phone: ${recipientPhone}
-Delivery address: ${deliveryAddress}
-Delivery city: ${deliveryCity}
-Location type: ${locationType || 'Not specified'}
-Delivery date: ${deliveryDate}
-Special instructions: ${instructions.trim() || 'None'}
-Sender name: ${anonymous ? `${senderName || 'N/A'} (show as Anonymous on the gift card)` : senderName}
-Send anonymously: ${anonymous ? 'Yes' : 'No'}
-Personal gift message: ${giftMessage.trim() || 'None'}`;
-
-    setIsSubmitting(true);
-    const targetId = conversationId ?? createConversation();
-    resetAndClose();
-    if (!conversationId) navigate(`/c/${targetId}`);
-    await sendAgentMessage(targetId, payload);
-    setIsSubmitting(false);
-    setStep('cart');
-  };
+  // Shared checkout state/logic — identical to the in-chat InlineCheckout card.
+  const checkout = useCheckoutForm({
+    items: selectedCart,
+    conversationId,
+    onPlaced: resetAndClose,
+  });
+  const { totalAmount } = checkout;
 
   return (
     <AnimatePresence>
@@ -176,48 +142,79 @@ Personal gift message: ${giftMessage.trim() || 'None'}`;
                       <p className="text-xs text-gray-400 mt-1">Ask me to find something!</p>
                     </div>
                   ) : (
-                    cart.map((item) => (
-                      <div key={item.product_id} className="flex gap-2.5 p-2.5 bg-white/70 rounded-2xl border border-pink-100/40 shadow-sm">
-                        <div className="w-14 h-14 bg-pink-50 rounded-xl shrink-0 overflow-hidden">
-                          {item.image
-                            ? <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
-                            : <div className="w-full h-full flex items-center justify-center"><Package size={18} className="text-pink-300" /></div>
-                          }
-                        </div>
-                        <div className="flex-1 flex flex-col justify-between min-w-0">
-                          <div className="flex justify-between gap-1">
-                            <p className="font-semibold text-xs line-clamp-2 text-gray-800">{item.name}</p>
-                            <button onClick={() => removeFromCart(item.product_id)} className="text-gray-300 hover:text-pink-400 shrink-0 transition-colors">
-                              <X size={13} />
-                            </button>
-                          </div>
-                          {item.icing_text && <p className="text-[10px] text-gray-400">Icing: "{item.icing_text}"</p>}
-                          <div className="flex items-center justify-between mt-1">
-                            <span className="font-bold text-pink-500 text-xs">Rs. {item.price?.toLocaleString()}</span>
-                            <div className="flex items-center rounded-lg border border-pink-100 bg-white">
-                              <button onClick={() => updateQuantity(item.product_id, Math.max(1, item.quantity - 1))} className="px-1.5 py-0.5 hover:bg-pink-50 text-gray-500 rounded-l-lg transition-colors"><Minus size={11} /></button>
-                              <span className="px-2 text-xs font-semibold text-gray-700">{item.quantity}</span>
-                              <button onClick={() => updateQuantity(item.product_id, item.quantity + 1)} className="px-1.5 py-0.5 hover:bg-pink-50 text-gray-500 rounded-r-lg transition-colors"><Plus size={11} /></button>
+                    <>
+                      {/* Select-all bar */}
+                      <div className="flex items-center justify-between px-1 pb-1">
+                        <button
+                          type="button"
+                          onClick={toggleAll}
+                          className="flex items-center gap-2 text-xs font-semibold text-gray-600 hover:text-pink-500 transition-colors"
+                        >
+                          <CheckBox checked={allSelected} onChange={toggleAll} label="Select all items" />
+                          {allSelected ? 'Deselect all' : 'Select all'}
+                        </button>
+                        <span className="text-[11px] font-medium text-gray-400">
+                          {selectedCount} of {cart.length} selected
+                        </span>
+                      </div>
+
+                      {cart.map((item) => {
+                        const checked = isSelected(item.product_id);
+                        return (
+                          <div
+                            key={item.product_id}
+                            className={`flex items-center gap-2.5 p-2.5 rounded-2xl border shadow-sm transition-colors ${
+                              checked ? 'bg-white/80 border-pink-200' : 'bg-white/40 border-pink-100/40'
+                            }`}
+                          >
+                            <CheckBox
+                              checked={checked}
+                              onChange={() => toggleItem(item.product_id)}
+                              label={`Select ${item.name ?? 'item'}`}
+                            />
+                            <div className={`w-14 h-14 bg-pink-50 rounded-xl shrink-0 overflow-hidden transition-opacity ${checked ? '' : 'opacity-50'}`}>
+                              {item.image
+                                ? <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                                : <div className="w-full h-full flex items-center justify-center"><Package size={18} className="text-pink-300" /></div>
+                              }
+                            </div>
+                            <div className={`flex-1 flex flex-col justify-between min-w-0 transition-opacity ${checked ? '' : 'opacity-50'}`}>
+                              <div className="flex justify-between gap-1">
+                                <p className="font-semibold text-xs line-clamp-2 text-gray-800">{item.name}</p>
+                                <button onClick={() => removeFromCart(item.product_id)} className="text-gray-300 hover:text-pink-400 shrink-0 transition-colors">
+                                  <X size={13} />
+                                </button>
+                              </div>
+                              {item.icing_text && <p className="text-[10px] text-gray-400">Icing: "{item.icing_text}"</p>}
+                              <div className="flex items-center justify-between mt-1">
+                                <span className="font-bold text-pink-500 text-xs">Rs. {item.price?.toLocaleString()}</span>
+                                <div className="flex items-center rounded-lg border border-pink-100 bg-white">
+                                  <button onClick={() => updateQuantity(item.product_id, Math.max(1, item.quantity - 1))} className="px-1.5 py-0.5 hover:bg-pink-50 text-gray-500 rounded-l-lg transition-colors"><Minus size={11} /></button>
+                                  <span className="px-2 text-xs font-semibold text-gray-700">{item.quantity}</span>
+                                  <button onClick={() => updateQuantity(item.product_id, item.quantity + 1)} className="px-1.5 py-0.5 hover:bg-pink-50 text-gray-500 rounded-r-lg transition-colors"><Plus size={11} /></button>
+                                </div>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </div>
-                    ))
+                        );
+                      })}
+                    </>
                   )}
                 </div>
 
                 {cart.length > 0 && (
                   <div className="px-4 py-3 border-t border-pink-100/50 bg-white/50 shrink-0">
                     <div className="flex justify-between items-center mb-2.5 text-sm">
-                      <span className="text-gray-500">Subtotal</span>
+                      <span className="text-gray-500">Subtotal ({selectedCount} item{selectedCount !== 1 ? 's' : ''})</span>
                       <span className="font-bold text-gray-800">Rs. {totalAmount.toLocaleString()}</span>
                     </div>
                     <button
                       onClick={() => setStep('checkout')}
-                      className="w-full text-white py-2.5 rounded-2xl font-bold text-sm transition-all hover:scale-[1.01] active:scale-[0.99]"
+                      disabled={selectedCount === 0}
+                      className="w-full text-white py-2.5 rounded-2xl font-bold text-sm transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-40 disabled:hover:scale-100"
                       style={{ background: 'linear-gradient(135deg, #ff3fa1, #ff007c)' }}
                     >
-                      Proceed to Checkout →
+                      {selectedCount === 0 ? 'Select items to checkout' : `Checkout ${selectedCount} item${selectedCount !== 1 ? 's' : ''} →`}
                     </button>
                   </div>
                 )}
@@ -233,7 +230,7 @@ Personal gift message: ${giftMessage.trim() || 'None'}`;
                     onClick={() => setSummaryOpen((v) => !v)}
                     className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold text-gray-600"
                   >
-                    <span>{cart.length} item{cart.length !== 1 ? 's' : ''} — <span className="text-pink-500">Rs. {totalAmount.toLocaleString()}</span></span>
+                    <span>{selectedCount} item{selectedCount !== 1 ? 's' : ''} — <span className="text-pink-500">Rs. {totalAmount.toLocaleString()}</span></span>
                     <ChevronDown size={13} className={`transition-transform duration-200 ${summaryOpen ? 'rotate-180' : ''}`} />
                   </button>
                   <AnimatePresence>
@@ -246,7 +243,7 @@ Personal gift message: ${giftMessage.trim() || 'None'}`;
                         className="overflow-hidden"
                       >
                         <div className="px-3 pb-2.5 space-y-2 border-t border-pink-100/50">
-                          {cart.map((item) => (
+                          {selectedCart.map((item) => (
                             <div key={item.product_id} className="flex items-center gap-2 pt-2">
                               <div className="w-8 h-8 rounded-lg bg-pink-50 shrink-0 overflow-hidden">
                                 {item.image
@@ -266,81 +263,7 @@ Personal gift message: ${giftMessage.trim() || 'None'}`;
 
                 {/* Scrollable form */}
                 <div className="flex-1 overflow-y-auto px-5 py-3 space-y-5">
-
-                  {/* Delivery */}
-                  <section>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2.5">Delivery</p>
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-2 gap-3">
-                        <Field label="City" required>
-                          <SearchableSelect options={SRI_LANKA_CITIES} value={deliveryCity} onChange={setDeliveryCity} placeholder="Type city…" />
-                        </Field>
-                        <Field label="Location Type">
-                          <SearchableSelect options={LOCATION_TYPES} value={locationType} onChange={setLocationType} placeholder="Select" />
-                        </Field>
-                      </div>
-                      <Field label="Street Address" required>
-                        <textarea
-                          value={deliveryAddress}
-                          onChange={(e) => setDeliveryAddress(e.target.value)}
-                          placeholder="House / flat no., street name, building, landmark…"
-                          rows={4}
-                          className={`${inputCls} resize-none leading-relaxed`}
-                        />
-                      </Field>
-                      <Field label="Delivery Date" required>
-                        <input type="date" value={deliveryDate} min={todayISO} onChange={(e) => setDeliveryDate(e.target.value)} className={inputCls} />
-                      </Field>
-                      <Field label="Special Instructions">
-                        <textarea value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="Notes for delivery person (optional)" rows={2} className={`${inputCls} resize-none`} />
-                      </Field>
-                    </div>
-                  </section>
-
-                  {/* Recipient */}
-                  <section>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2.5">Recipient</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <Field label="Full Name" required>
-                        <input type="text" value={recipientName} onChange={(e) => setRecipientName(e.target.value)} placeholder="Name" className={inputCls} />
-                      </Field>
-                      <Field label="Phone" required>
-                        <input type="text" value={recipientPhone} onChange={(e) => setRecipientPhone(e.target.value)} placeholder="+94 7X…" className={inputCls} />
-                      </Field>
-                    </div>
-                  </section>
-
-                  {/* Sender & Gift */}
-                  <section>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2.5">Sender &amp; Gift</p>
-                    <div className="space-y-3">
-                      <Field label="Your Name">
-                        <input type="text" value={senderName} onChange={(e) => setSenderName(e.target.value)} placeholder="Your name" disabled={anonymous} className={`${inputCls} disabled:bg-gray-50 disabled:text-gray-400`} />
-                      </Field>
-                      <label className="flex items-center gap-2 text-xs text-gray-600 select-none cursor-pointer">
-                        <input type="checkbox" checked={anonymous} onChange={(e) => setAnonymous(e.target.checked)} className="h-3.5 w-3.5 rounded accent-pink-500" />
-                        Send anonymously
-                      </label>
-                      <div>
-                        <div className="mb-1 flex items-center justify-between">
-                          <label className="block text-xs font-semibold text-gray-500">Gift Card Message</label>
-                          <button
-                            type="button"
-                            onClick={handleDraftGiftMessage}
-                            disabled={draftingMsg}
-                            title="Let Kapruka write a heartfelt message for you"
-                            className="flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-600 transition-colors hover:bg-violet-100 disabled:opacity-60"
-                          >
-                            {draftingMsg
-                              ? <><Loader2 size={10} className="animate-spin" /> Writing…</>
-                              : <><Sparkles size={10} /> Write one for me</>}
-                          </button>
-                        </div>
-                        <textarea value={giftMessage} onChange={(e) => setGiftMessage(e.target.value)} placeholder="Personal message on gift card — or tap ✨ to have Kapruka write it" rows={3} maxLength={300} className={`${inputCls} resize-none`} />
-                        <p className="text-right text-[10px] text-gray-400 mt-0.5">{giftMessage.length}/300</p>
-                      </div>
-                    </div>
-                  </section>
+                  <CheckoutFields checkout={checkout} />
 
                   {/* Totals */}
                   <div className="border-t border-pink-100/60 pt-3 space-y-1">
@@ -360,12 +283,12 @@ Personal gift message: ${giftMessage.trim() || 'None'}`;
                 {/* Sticky place order button */}
                 <div className="px-5 pb-5 pt-3 bg-white/50 border-t border-pink-100/50 shrink-0">
                   <button
-                    onClick={handlePlaceOrder}
-                    disabled={isSubmitting}
+                    onClick={checkout.placeOrder}
+                    disabled={checkout.isSubmitting}
                     className="w-full text-white py-2.5 rounded-2xl font-bold text-sm transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50"
                     style={{ background: 'linear-gradient(135deg, #ff3fa1, #ff007c)' }}
                   >
-                    {isSubmitting ? 'Processing…' : 'Place Order via Chat →'}
+                    {checkout.isSubmitting ? 'Processing…' : 'Place Order via Chat →'}
                   </button>
                 </div>
               </>

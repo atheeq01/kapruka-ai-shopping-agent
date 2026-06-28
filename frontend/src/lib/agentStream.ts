@@ -1,7 +1,8 @@
 import { useAppStore } from '../store/cartStore';
 import type { AgentStep } from '../store/cartStore';
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || 'http://localhost:8000';
 
 let _pendingOrderIds: string[] = [];
 
@@ -138,6 +139,17 @@ async function _streamIntoMessage(conversationId: string, botMsgId: string): Pro
                   });
                 }
               }
+              dirty = true;
+            } else if (event.type === 'checkout_form') {
+              // Agent asked to collect delivery details via the in-chat form.
+              // Snapshot the items it should cover (the cart, unless it named a
+              // specific subset) so the form is self-contained.
+              const items = Array.isArray(event.items) && event.items.length
+                ? event.items
+                : useAppStore.getState().cart;
+              useAppStore.getState().updateMessage(conversationId, botMsgId, {
+                checkoutForm: { items },
+              });
               dirty = true;
             } else if (event.type === 'order') {
               if (event.order) {
