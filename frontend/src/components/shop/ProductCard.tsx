@@ -268,7 +268,7 @@ const HoverPanel: React.FC<HoverPanelProps> = ({ product, onClose }) => {
             {/* Primary Action: Add / Update Cart */}
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); (sel.hasVariants || product.isCake) ? sel.add() : sel.toggleSimple(); }}
+              onClick={(e) => { e.stopPropagation(); if (sel.hasVariants || product.isCake) sel.add(); else sel.toggleSimple(); }}
               disabled={!sel.inStock}
               className={cn(
                 'flex w-full items-center justify-center gap-1.5 rounded-xl py-3 text-xs font-bold transition-all active:scale-95 shadow-md shadow-violet-100',

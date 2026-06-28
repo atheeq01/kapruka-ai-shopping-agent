@@ -64,7 +64,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({ isOpen, onClose, conversat
   const toggleItem = (id: string) =>
     setDeselectedIds((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
 
