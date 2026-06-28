@@ -10,12 +10,15 @@ import type { NormalizedProduct, ProductVariant } from '../../lib/normalizeProdu
  * quantity before adding, and reflect the chosen variant's price. Simple
  * products keep the original one-tap select/deselect behaviour.
  */
+// eslint-disable-next-line react-refresh/only-export-components -- selection hook intentionally colocated with its small UI helpers below
 export function useProductSelection(product: NormalizedProduct) {
   const cart = useAppStore((s) => s.cart);
   const addToCart = useAppStore((s) => s.addToCart);
   const removeFromCart = useAppStore((s) => s.removeFromCart);
 
-  const variants = product.variants ?? [];
+  // Memoize so the array reference is stable across renders (keeps the
+  // useMemo below from recomputing — and re-running effects — every render).
+  const variants = useMemo(() => product.variants ?? [], [product.variants]);
   const hasVariants = variants.length > 0;
 
   const firstAvailable = useMemo(

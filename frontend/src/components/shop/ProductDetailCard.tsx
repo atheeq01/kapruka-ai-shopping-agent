@@ -6,7 +6,7 @@ import { normalizeProduct } from '../../lib/normalizeProduct';
 import { IcingInput, QtyStepper, SizePicker, useProductSelection } from './productSelection';
 
 interface ProductDetailCardProps {
-  product: any;
+  product: unknown;
 }
 
 const STOCK_LABELS: Record<string, string> = {

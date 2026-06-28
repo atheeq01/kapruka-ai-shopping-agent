@@ -25,8 +25,8 @@ const uid = () =>
 async function _streamIntoMessage(conversationId: string, botMsgId: string): Promise<void> {
   let currentText     = '';
   let currentThought  = '';
-  let currentProducts: any[] = [];
-  let currentProductDetail: any = null;
+  let currentProducts: unknown[] = [];
+  let currentProductDetail: unknown = null;
   const steps: AgentStep[] = [];
   const stepByTool    = new Map<string, AgentStep>();
   let thinkingStep: AgentStep | null = null;

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Package, ChevronDown, ChevronUp, MapPin, Calendar, User } from 'lucide-react';
 
-interface OrderData {
+export interface OrderData {
   order_number?: string;
   status?: string;
   delivery_date?: string;

@@ -17,7 +17,7 @@ const SORT_LABELS: Record<SortOption, string> = {
 const PAGE_SIZE = 8;
 
 interface ProductResultsPanelProps {
-  products: any[];
+  products: unknown[];
 }
 
 export const ProductResultsPanel: React.FC<ProductResultsPanelProps> = ({ products }) => {

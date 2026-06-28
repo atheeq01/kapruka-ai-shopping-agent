@@ -23,8 +23,8 @@ const MARKDOWN_COMPONENTS: Components = {
 import type { ChatMessage } from '../../store/cartStore';
 import { ProductResultsPanel } from '../shop/ProductResultsPanel';
 import { ProductDetailCard } from '../shop/ProductDetailCard';
-import { OrderCard } from '../shop/OrderCard';
-import { OrderConfirmationCard } from '../shop/OrderConfirmationCard';
+import { OrderCard, type OrderData } from '../shop/OrderCard';
+import { OrderConfirmationCard, type OrderConfirmation } from '../shop/OrderConfirmationCard';
 import { InlineCheckout } from '../shop/InlineCheckout';
 import { ThoughtProcess } from './ThoughtProcess';
 import { AgentThinking } from './AgentThinking';
@@ -222,7 +222,7 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({ message, conversatio
           </div>
         )}
 
-        {message.productDetail && <ProductDetailCard product={message.productDetail} />}
+        {!!message.productDetail && <ProductDetailCard product={message.productDetail} />}
 
         {message.products && message.products.length > 0 && (
           <ProductResultsPanel products={message.products} />
@@ -233,14 +233,14 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({ message, conversatio
         )}
 
         {message.orderConfirmation && (
-          <OrderConfirmationCard order={message.orderConfirmation as any} />
+          <OrderConfirmationCard order={message.orderConfirmation as unknown as OrderConfirmation} />
         )}
 
-        {message.order && <OrderCard order={message.order as any} />}
+        {message.order && <OrderCard order={message.order as unknown as OrderData} />}
 
         {/* Footer */}
         {!isStreaming &&
-          (message.content || message.products || message.productDetail || message.order || message.orderConfirmation || message.checkoutForm) && (
+          Boolean(message.content || message.products || message.productDetail || message.order || message.orderConfirmation || message.checkoutForm) && (
           <div className="flex items-center gap-2 mt-1 px-0.5">
             {message.content && <MessageActions content={message.content} />}
             {message.lang && <LanguageBadge lang={message.lang} auto />}

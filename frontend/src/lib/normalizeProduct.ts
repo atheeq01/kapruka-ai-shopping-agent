@@ -1,3 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any --
+   This module's whole job is to normalize arbitrary, loosely-typed backend JSON
+   (varying field names: product_id|id, image_url|image, nested price objects…)
+   into the strict NormalizedProduct shape. Dynamic `any` access at this boundary
+   is intentional; downstream code consumes the typed result. */
+
 export interface ProductVariant {
   label: string;
   price: number;

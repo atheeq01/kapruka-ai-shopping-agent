@@ -31,8 +31,8 @@ export interface ChatMessage {
   thought?: string;
   steps?: AgentStep[];
   done?: boolean;
-  products?: any[];
-  productDetail?: any;              // a single looked-up product (with size variants)
+  products?: unknown[];             // raw product payloads; normalized at render time
+  productDetail?: unknown;          // a single looked-up product (with size variants)
   order?: Record<string, unknown>;  // structured order tracking result
   orderConfirmation?: Record<string, unknown>; // full submitted order (create_order)
   checkoutForm?: { items: CartItem[] }; // in-chat checkout form the agent requested

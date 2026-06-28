@@ -78,7 +78,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+  }, [open, portalId]);
 
   const select = (opt: string) => {
     onChange(opt);

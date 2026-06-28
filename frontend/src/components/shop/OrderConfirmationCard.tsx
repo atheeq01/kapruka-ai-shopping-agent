@@ -20,7 +20,7 @@ interface OrderItem {
   icing_text?: string | null;
 }
 
-interface OrderConfirmation {
+export interface OrderConfirmation {
   items?: OrderItem[];
   recipient?: { name?: string; phone?: string };
   delivery?: {
