@@ -176,9 +176,11 @@ export const ProductResultsPanel: React.FC<ProductResultsPanelProps> = ({ produc
       </div>
 
       {view === 'grid' ? (
-        <div className="grid grid-cols-1 @[20rem]:grid-cols-2 @md:grid-cols-3 @2xl:grid-cols-4 @5xl:grid-cols-5 gap-4 @md:gap-5 p-4 bg-gray-50/50">
+        <div className="flex overflow-x-auto md:grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-3 md:gap-5 p-3 md:p-4 bg-gray-50/50 snap-x snap-mandatory scrollbar-hide w-full">
           {shown.map((product, index) => (
-            <ProductCard key={product.id} product={product} index={index} view="grid" />
+            <div key={product.id} className="w-[160px] md:w-auto shrink-0 snap-center md:max-w-none">
+              <ProductCard product={product} index={index} view="grid" />
+            </div>
           ))}
         </div>
       ) : (

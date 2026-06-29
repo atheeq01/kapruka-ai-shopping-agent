@@ -94,7 +94,7 @@ const MessageActions: React.FC<{ content: string }> = ({ content }) => {
   };
 
   return (
-    <div className="flex items-center gap-1 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+    <div className="flex items-center gap-1 mt-1.5 opacity-100 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-opacity duration-200">
       <ActionBtn onClick={handleCopy} title="Copy">
         {copied ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
       </ActionBtn>
@@ -213,7 +213,7 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({ message, conversatio
         <div className="max-w-[85%] sm:max-w-[600px] bubble-user rounded-2xl rounded-tr-md px-3.5 py-2.5 text-[13.5px] leading-[1.5] whitespace-pre-wrap">
           {message.content}
         </div>
-        <div className="flex items-center gap-2 mt-1 px-0.5">
+        <div className="flex items-center justify-end gap-2 mt-1 px-0.5 w-full">
           {message.lang && <LanguageBadge lang={message.lang} auto />}
           <div className="flex items-center gap-1 text-[10.5px] text-gray-400">
             {time}
@@ -274,8 +274,8 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({ message, conversatio
         {!isStreaming &&
           Boolean(message.content || message.products || message.productDetail || message.order || message.orderConfirmation || message.checkoutForm) && (
           <div className="flex items-center gap-2 mt-1 px-0.5">
-            {message.content && <MessageActions content={message.content} />}
             {message.lang && <LanguageBadge lang={message.lang} auto />}
+            {message.content && <MessageActions content={message.content} />}
             <span className="text-[10.5px] text-gray-400 ml-auto">{time}</span>
           </div>
         )}

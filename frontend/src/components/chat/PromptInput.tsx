@@ -28,7 +28,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     const ta = textareaRef.current;
     if (!ta) return;
     ta.style.height = 'auto';
-    ta.style.height = `${Math.min(ta.scrollHeight, 160)}px`;
+    ta.style.height = `${Math.min(ta.scrollHeight, 100)}px`;
   }, [value]);
 
   const submit = () => {
@@ -57,7 +57,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
   }
 
   return (
-    <div className="input-bar w-full px-4 pt-3 pb-2.5">
+    <div className="input-bar w-full px-2 py-2 flex items-end gap-2 rounded-3xl shadow-sm bg-white/90 backdrop-blur-md">
       <textarea
         ref={textareaRef}
         autoFocus={autoFocus}
@@ -67,33 +67,31 @@ export const PromptInput: React.FC<PromptInputProps> = ({
         placeholder={placeholder}
         rows={1}
         className={cn(
-          'w-full bg-transparent border-none focus:outline-none text-[#1a1a2e] placeholder:text-gray-400 resize-none overflow-hidden leading-relaxed',
+          'w-full bg-transparent border-none focus:outline-none text-[#1a1a2e] placeholder:text-gray-400 resize-none leading-relaxed py-2',
           isLg ? 'text-base' : 'text-sm',
         )}
-        style={{ minHeight: isLg ? '44px' : '36px' }}
+        style={{ minHeight: '36px' }}
       />
 
-      <div className="flex items-center justify-end gap-2 mt-2">
-        <button
-          type="button"
-          onClick={() => setIsRecording(true)}
-          className="flex items-center gap-1.5 text-gray-400 hover:text-pink-500 text-xs font-medium transition-all duration-200 rounded-full px-2.5 py-1.5 hover:bg-pink-50"
-        >
-          <Mic size={13} />
-          <span>Voice</span>
-        </button>
-
-        <motion.button
-          type="button"
-          onClick={submit}
-          disabled={!value.trim()}
-          whileHover={value.trim() ? { scale: 1.06 } : undefined}
-          whileTap={value.trim() ? { scale: 0.93 } : undefined}
-          className="btn-send rounded-full px-4 py-1.5 text-sm font-semibold flex items-center gap-1.5"
-        >
-          <Send size={13} />
-          <span>Send</span>
-        </motion.button>
+      <div className="flex items-center shrink-0 mb-0.5 gap-1">
+        {!value.trim() ? (
+          <button
+            type="button"
+            onClick={() => setIsRecording(true)}
+            className="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-pink-500 transition-colors rounded-full hover:bg-pink-50"
+          >
+            <Mic size={18} />
+          </button>
+        ) : (
+          <motion.button
+            type="button"
+            onClick={submit}
+            whileTap={{ scale: 0.9 }}
+            className="w-9 h-9 flex items-center justify-center bg-black text-white rounded-full hover:bg-gray-800 transition-colors shadow-sm"
+          >
+            <Send size={15} className="ml-0.5" />
+          </motion.button>
+        )}
       </div>
     </div>
   );

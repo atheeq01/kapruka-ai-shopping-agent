@@ -95,10 +95,17 @@ export function normalizeProduct(raw: any): NormalizedProduct {
   return {
     id: String(raw.id ?? raw.product_id ?? raw.productId ?? crypto.randomUUID()),
     name: raw.name ?? raw.title ?? 'Unnamed product',
-    price: parsePrice(
-      raw.price ?? raw.unit_price ?? raw.amount ?? raw.selling_price ??
-      raw.sale_price ?? raw.current_price ?? raw.price_lkr ?? raw.mrp,
-    ),
+    price: (function() {
+      for (const field of [raw.price, raw.unit_price, raw.amount, raw.selling_price, raw.sale_price, raw.current_price, raw.price_lkr, raw.mrp]) {
+        const p = parsePrice(field);
+        if (p > 0) return p;
+      }
+      if (variants && variants.length > 0) {
+        const vPrice = variants.find(v => v.price > 0)?.price;
+        if (vPrice) return vPrice;
+      }
+      return 0;
+    })(),
     ...(compareAtPrice > 0 && { compareAtPrice }),
     image: primaryImage,
     ...(images && images.length > 0 && { images }),
