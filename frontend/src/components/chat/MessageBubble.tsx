@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { Check, Copy, ThumbsUp, Volume2, Loader2 } from 'lucide-react';
 import { easeOutExpo } from '../../lib/motion';
 import { cn } from '../../lib/utils';
-import { quickDetect } from '../../lib/detectLang';
+
 
 /**
  * Stable, deterministic waveform heights for the voice-upload shimmer.
@@ -98,7 +98,7 @@ function stripMarkdown(text: string): string {
 
 
 
-const MessageActions: React.FC<{ content: string; lang?: string }> = ({ content, lang }) => {
+const MessageActions: React.FC<{ content: string; lang?: string }> = ({ content }) => {
   const [copied,  setCopied]  = useState(false);
   const [liked,   setLiked]   = useState(false);
   const [speaking, setSpeaking] = useState(false);

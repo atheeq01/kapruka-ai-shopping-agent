@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { X, Send } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -17,28 +17,36 @@ export const RecordingBar: React.FC<RecordingBarProps> = ({ onCancel, onSend }) 
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef        = useRef<Blob[]>([]);
-  const startTimeRef     = useRef<number>(Date.now());
+  const startTimeRef     = useRef<number>(0);
   const timerRef         = useRef<ReturnType<typeof setInterval> | null>(null);
   const analyserRef      = useRef<AnalyserNode | null>(null);
   const audioCtxRef      = useRef<AudioContext | null>(null);
   const animFrameRef     = useRef<number | null>(null);
   const streamRef        = useRef<MediaStream | null>(null);
 
-  const drawBars = useCallback(() => {
-    const analyser = analyserRef.current;
-    if (!analyser) return;
-    const data = new Uint8Array(analyser.frequencyBinCount);
-    analyser.getByteFrequencyData(data);
-    const newBars = Array.from({ length: BAR_COUNT }, (_, i) => {
-      const idx = Math.floor((i / BAR_COUNT) * data.length);
-      return Math.max(0.08, data[idx] / 255);
-    });
-    setBars(newBars);
-    animFrameRef.current = requestAnimationFrame(drawBars);
-  }, []);
+  const cleanup = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    analyserRef.current?.disconnect();
+    audioCtxRef.current?.close();
+    streamRef.current?.getTracks().forEach(t => t.stop());
+  };
 
   useEffect(() => {
     let mounted = true;
+
+    function drawBars() {
+      const analyser = analyserRef.current;
+      if (!analyser) return;
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      analyser.getByteFrequencyData(data);
+      const newBars = Array.from({ length: BAR_COUNT }, (_, i) => {
+        const idx = Math.floor((i / BAR_COUNT) * data.length);
+        return Math.max(0.08, data[idx] / 255);
+      });
+      setBars(newBars);
+      animFrameRef.current = requestAnimationFrame(drawBars);
+    }
 
     (async () => {
       try {
@@ -82,14 +90,6 @@ export const RecordingBar: React.FC<RecordingBarProps> = ({ onCancel, onSend }) 
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const cleanup = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-    analyserRef.current?.disconnect();
-    audioCtxRef.current?.close();
-    streamRef.current?.getTracks().forEach(t => t.stop());
-  };
 
   const handleSend = () => {
     const durationMs = Date.now() - startTimeRef.current;
