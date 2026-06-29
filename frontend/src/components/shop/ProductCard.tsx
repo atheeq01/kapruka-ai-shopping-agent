@@ -248,6 +248,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index, view }
     left = Math.max(margin, Math.min(left, vw - panelW - margin));
     top = Math.max(margin, Math.min(top, vh - panelH - margin));
 
+    // Convert to absolute document coordinates
+    left += window.scrollX;
+    top += window.scrollY;
+
     setPanelStyle({ top, left, width: panelW });
   };
 
@@ -273,6 +277,20 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index, view }
     },
     [],
   );
+
+  useEffect(() => {
+    if (!hovered) return;
+    
+    const handleScroll = () => {
+      clearTimeout(openTimer.current);
+      clearTimeout(hideTimer.current);
+      setHovered(false);
+    };
+
+    // Use capture phase to detect scrolling in any scrollable container
+    window.addEventListener('scroll', handleScroll, true);
+    return () => window.removeEventListener('scroll', handleScroll, true);
+  }, [hovered]);
 
   if (view === 'list') {
     return (
@@ -432,8 +450,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index, view }
       {createPortal(
         <AnimatePresence>
           {hovered && (
-            <div
-              style={{ position: 'fixed', zIndex: 9999, ...panelStyle }}
+              <div
+              style={{ position: 'absolute', zIndex: 9999, ...panelStyle }}
               onMouseEnter={() => clearTimeout(hideTimer.current)}
               onMouseLeave={hidePanel}
             >
