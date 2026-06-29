@@ -94,7 +94,7 @@ export const ProductDetailCard: React.FC<ProductDetailCardProps> = ({ product: r
                   onClick={() => { setActiveImg(i); setImgError(false); }}
                   className={cn(
                     'h-11 w-11 shrink-0 overflow-hidden rounded-md border-2 transition-all',
-                    i === activeImg ? 'border-violet-500' : 'border-transparent opacity-70 hover:opacity-100',
+                    i === activeImg ? 'border-primary-500' : 'border-transparent opacity-70 hover:opacity-100',
                   )}
                 >
                   <img src={src} alt="" className="h-full w-full object-cover" />
@@ -114,7 +114,7 @@ export const ProductDetailCard: React.FC<ProductDetailCardProps> = ({ product: r
           <h3 className="text-base font-semibold leading-snug text-kapruka-dark">{product.name}</h3>
 
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="text-lg font-bold text-violet-700">Rs. {sel.price.toLocaleString()}</span>
+            <span className="text-lg font-bold text-gray-900">Rs. {sel.price.toLocaleString()}</span>
             {product.compareAtPrice && (
               <span className="text-sm text-gray-400 line-through">
                 Rs. {product.compareAtPrice.toLocaleString()}
@@ -140,7 +140,7 @@ export const ProductDetailCard: React.FC<ProductDetailCardProps> = ({ product: r
                 <button
                   type="button"
                   onClick={() => setDescOpen((v) => !v)}
-                  className="mt-0.5 inline-flex items-center gap-0.5 text-[11px] font-medium text-violet-600 hover:text-violet-700"
+                  className="mt-0.5 inline-flex items-center gap-0.5 text-[11px] font-medium text-primary-600 hover:text-primary-700"
                 >
                   {descOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                   {descOpen ? 'Show less' : 'Read more'}
@@ -199,10 +199,11 @@ export const ProductDetailCard: React.FC<ProductDetailCardProps> = ({ product: r
               disabled={!sel.inStock}
               className={cn(
                 'flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold transition-all active:scale-95',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 focus-visible:ring-offset-1',
                 'disabled:cursor-not-allowed disabled:opacity-40',
                 sel.isSelected
                   ? 'bg-kapruka-orange text-white hover:bg-kapruka-orange/90'
-                  : 'bg-violet-600 text-white hover:bg-violet-700',
+                  : 'btn-primary',
               )}
             >
               {sel.isSelected ? <Check size={15} strokeWidth={3} /> : <ShoppingCart size={15} />}

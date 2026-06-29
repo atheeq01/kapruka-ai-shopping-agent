@@ -11,6 +11,28 @@ export default {
         sans: ['Inter', 'Noto Sans Tamil', 'Noto Sans Sinhala', 'sans-serif'],
       },
       colors: {
+        /* ── Semantic design tokens (single source of truth) ─────────────
+           `primary` is the one Kapruka magenta used for EVERY primary CTA.
+           Reference these everywhere instead of ad-hoc hex / per-component
+           violet|magenta|pink values. */
+        primary: {
+          50:  '#fff0f7',
+          100: '#ffe0ef',
+          200: '#ffc2df',
+          300: '#ff8cc2',
+          400: '#ff52a4',
+          500: '#FF1F8F', // brand magenta
+          600: '#e6097b',
+          700: '#bd0866',
+          800: '#990a55',
+          900: '#7d0d49',
+          DEFAULT: '#FF1F8F',
+        },
+        accent:  { DEFAULT: '#a855f7' }, // violet — secondary/illustrative only
+        success: { DEFAULT: '#10B981', 600: '#059669' },
+        danger:  { DEFAULT: '#ef4444' },
+        surface: '#ffffff',
+        border:  '#f0e6f5',
         kapruka: {
           primary: '#FF1F8F',
           purple: '#a855f7',

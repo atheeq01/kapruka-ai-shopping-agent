@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShoppingBag } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -74,7 +74,9 @@ export const LandingPage: React.FC = () => {
   const navigate = useNavigate();
   const createConversation = useAppStore((s) => s.createConversation);
   const cartCount = useAppStore((s) => s.cart.reduce((acc, i) => acc + i.quantity, 0));
-  const [isCartOpen, setIsCartOpen] = useState(false);
+  const isCartOpen = useAppStore((s) => s.cartOpen);
+  const openCart = useAppStore((s) => s.openCart);
+  const closeCart = useAppStore((s) => s.closeCart);
 
   const handleStart = (text: string) => {
     const id = createConversation();
@@ -118,7 +120,7 @@ export const LandingPage: React.FC = () => {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5 }}
-            onClick={() => setIsCartOpen((v) => !v)}
+            onClick={() => (isCartOpen ? closeCart() : openCart('cart'))}
             className="relative flex items-center gap-2 bg-white/80 backdrop-blur-sm border border-white/90 rounded-full px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-white hover:shadow-md transition-all duration-200 hover:scale-105 active:scale-95"
           >
             <ShoppingBag size={15} />
@@ -230,7 +232,7 @@ export const LandingPage: React.FC = () => {
       </div>
 
       {/* Inline cart panel (no overlay) */}
-      <CartPanel isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
+      <CartPanel />
     </div>
   );
 };

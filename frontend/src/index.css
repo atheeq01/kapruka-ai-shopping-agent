@@ -182,6 +182,42 @@
     box-shadow: 0 -8px 20px -12px rgba(124, 58, 237, 0.12);
   }
 
+  /* ── Primary CTA (single brand colour for every primary action) ─────
+     One magenta gradient referenced by all primary buttons so Add-to-Cart,
+     Checkout, Buy Now and Place Order share the exact same intent colour. */
+  .btn-primary {
+    background: linear-gradient(135deg, #ff3fa1 0%, #ff007c 100%);
+    color: #fff;
+    box-shadow: 0 4px 16px -4px rgba(255, 0, 124, 0.45);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+  }
+  .btn-primary:hover:not(:disabled) { filter: brightness(1.04); box-shadow: 0 6px 22px -4px rgba(255, 0, 124, 0.55); }
+  .btn-primary:active:not(:disabled) { transform: scale(0.97); }
+  .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+
+  /* ── Google Places autocomplete normalisation ─────
+     The <gmp-place-autocomplete> web component ships a dark default surface
+     that clashed with the pink theme (the "black input box"). Force it onto a
+     normal white surface with our border + dark text so it matches every other
+     field in the checkout form. */
+  gmp-place-autocomplete {
+    --gmpx-color-surface: #ffffff;
+    --gmpx-color-on-surface: #1a1a2e;
+    --gmpx-color-on-surface-variant: #6b7280;
+    width: 100%;
+    background: #ffffff;
+    border: 1px solid #ffe0ef;            /* primary-100 */
+    border-radius: 0.75rem;
+    color: #1a1a2e;
+    overflow: hidden;
+  }
+  gmp-place-autocomplete::part(input),
+  gmp-place-autocomplete input {
+    background: #ffffff !important;
+    color: #1a1a2e !important;
+    border-radius: 0.75rem;
+  }
+
   /* ── Pink send button ───── */
   .btn-send {
     background: linear-gradient(135deg, #ff3fa1 0%, #ff007c 100%);

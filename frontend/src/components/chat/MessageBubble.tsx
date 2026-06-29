@@ -3,6 +3,7 @@ import ReactMarkdown, { type Components } from 'react-markdown';
 import { motion } from 'framer-motion';
 import { Check, Copy, ThumbsUp, Volume2 } from 'lucide-react';
 import { easeOutExpo } from '../../lib/motion';
+import { cn } from '../../lib/utils';
 
 /**
  * Stable, deterministic waveform heights for the voice-upload shimmer.
@@ -119,6 +120,46 @@ const ActionBtn: React.FC<{ children: React.ReactNode; onClick?: () => void; tit
   </button>
 );
 
+/** Past this character count a completed answer collapses behind "Show more". */
+const COLLAPSE_THRESHOLD = 600;
+
+/**
+ * Assistant answer body. Long, completed answers collapse behind a "Show more"
+ * toggle so a single verbose reply can't push the whole conversation off-screen
+ * (clamped to ~6 lines). Streaming answers always render in full.
+ */
+const AiText: React.FC<{ content: string; streaming: boolean }> = ({ content, streaming }) => {
+  const [expanded, setExpanded] = useState(false);
+  const collapsible = !streaming && content.length > COLLAPSE_THRESHOLD;
+
+  return (
+    <div className="inline-block w-fit max-w-full sm:max-w-[680px] bubble-ai rounded-2xl rounded-tl-md px-3.5 py-2.5 text-[13.5px] leading-[1.55] prose prose-sm prose-p:my-1 prose-ul:my-1 prose-li:my-0 prose-headings:text-[14px] prose-strong:text-gray-900">
+      {/* Reliable clamp via max-height (line-clamp can't clamp markdown block
+          children); a soft fade hints there's more below. */}
+      <div className={cn('relative', collapsible && !expanded && 'max-h-[8.5rem] overflow-hidden')}>
+        <ReactMarkdown components={MARKDOWN_COMPONENTS}>
+          {content}
+        </ReactMarkdown>
+        {collapsible && !expanded && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-9 bg-gradient-to-t from-white to-transparent" />
+        )}
+      </div>
+      {streaming && (
+        <span className="ml-0.5 inline-block h-3.5 w-[2px] -mb-0.5 animate-pulse rounded-full bg-primary-400 align-middle" />
+      )}
+      {collapsible && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-1 text-[12px] font-semibold text-primary-600 hover:text-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 rounded"
+        >
+          {expanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
+    </div>
+  );
+};
+
 const MessageBubbleInner: React.FC<MessageBubbleProps> = ({ message, conversationId }) => {
   const isUser      = message.role === 'user';
   const isStreaming = message.done === false;
@@ -169,7 +210,7 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({ message, conversatio
         transition={{ duration: 0.4, ease: easeOutExpo }}
         className="flex flex-col items-end my-2"
       >
-        <div className="max-w-[72%] bubble-user rounded-2xl rounded-tr-md px-3.5 py-2.5 text-[13.5px] leading-[1.5] whitespace-pre-wrap">
+        <div className="max-w-[85%] sm:max-w-[600px] bubble-user rounded-2xl rounded-tr-md px-3.5 py-2.5 text-[13.5px] leading-[1.5] whitespace-pre-wrap">
           {message.content}
         </div>
         <div className="flex items-center gap-2 mt-1 px-0.5">
@@ -211,16 +252,7 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({ message, conversatio
         {/* Collapsed reasoning once done */}
         {!isStreaming && message.thought && <ThoughtProcess text={message.thought} />}
 
-        {message.content && (
-          <div className="inline-block max-w-[88%] bubble-ai rounded-2xl rounded-tl-md px-3.5 py-2.5 text-[13.5px] leading-[1.55] prose prose-sm prose-p:my-1 prose-ul:my-1 prose-li:my-0 prose-headings:text-[14px] prose-strong:text-gray-900">
-            <ReactMarkdown components={MARKDOWN_COMPONENTS}>
-              {message.content}
-            </ReactMarkdown>
-            {isStreaming && (
-              <span className="ml-0.5 inline-block h-3.5 w-[2px] -mb-0.5 animate-pulse rounded-full bg-pink-400 align-middle" />
-            )}
-          </div>
-        )}
+        {message.content && <AiText content={message.content} streaming={isStreaming} />}
 
         {!!message.productDetail && <ProductDetailCard product={message.productDetail} />}
 

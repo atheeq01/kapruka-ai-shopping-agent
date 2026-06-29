@@ -50,11 +50,37 @@ export interface Conversation {
 
 export type LanguagePreference = 'AUTO' | 'EN' | 'SI' | 'TA';
 
+/**
+ * The in-progress (pre-add-to-cart) selection for a product — size, quantity
+ * and optional cake icing. Lives here, keyed by product id, so the product
+ * card, the hover quick-view and the detail card all read and write the SAME
+ * value (single source of truth — fixes the disconnected-stepper bug).
+ */
+export interface ProductSelection {
+  qty: number;
+  size?: string;
+  icing?: string;
+}
+
+/** Which surface the cart drawer should show when opened. */
+export type CartStep = 'cart' | 'checkout';
+
 interface AppState {
   cart: CartItem[];
   conversations: Record<string, Conversation>;
   conversationOrder: string[]; // most-recent-first, drives the sidebar list
   languagePreference: LanguagePreference;
+
+  /** Transient per-product selection drafts (not persisted). */
+  selections: Record<string, ProductSelection>;
+  setSelection: (product_id: string, patch: Partial<ProductSelection>) => void;
+
+  /** Transient cart-drawer UI state (not persisted) so any in-chat card can
+      open the single checkout surface. */
+  cartOpen: boolean;
+  cartStep: CartStep;
+  openCart: (step?: CartStep) => void;
+  closeCart: () => void;
 
   addToCart: (item: CartItem) => void;
   removeFromCart: (product_id: string) => void;
@@ -82,6 +108,23 @@ export const useAppStore = create<AppState>()(
       conversations: {},
       conversationOrder: [],
       languagePreference: 'AUTO',
+
+      selections: {},
+      setSelection: (product_id, patch) =>
+        set((state) => {
+          const merged = { ...state.selections[product_id], ...patch };
+          return {
+            selections: {
+              ...state.selections,
+              [product_id]: { ...merged, qty: merged.qty ?? 1 },
+            },
+          };
+        }),
+
+      cartOpen: false,
+      cartStep: 'cart',
+      openCart: (step = 'cart') => set({ cartOpen: true, cartStep: step }),
+      closeCart: () => set({ cartOpen: false }),
 
       addToCart: (item) =>
         set((state) => {
@@ -177,6 +220,14 @@ export const useAppStore = create<AppState>()(
     {
       name: 'kapruka-agent-storage',
       version: 3,
+      // Persist only durable data. Transient UI/selection drafts (selections,
+      // cartOpen, cartStep) are intentionally excluded so they reset per session.
+      partialize: (state) => ({
+        cart: state.cart,
+        conversations: state.conversations,
+        conversationOrder: state.conversationOrder,
+        languagePreference: state.languagePreference,
+      }),
       // v1 stored a flat `chatHistory` array. v2 moved to multi-conversation.
       // v3 does a one-time reset of the conversation list to clear leftover test
       // chats ("hello", "hwllo", duplicates) so the demo opens clean. The cart is

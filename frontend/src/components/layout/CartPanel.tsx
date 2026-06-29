@@ -6,12 +6,24 @@ import { CheckoutFields } from '../shop/CheckoutFields';
 import { useCheckoutForm } from '../../lib/useCheckoutForm';
 
 interface CartPanelProps {
-  isOpen: boolean;
-  onClose: () => void;
   conversationId?: string;
 }
 
 type Step = 'cart' | 'checkout';
+
+/** Tracks whether we're at the lg breakpoint (side panel) vs mobile (bottom sheet). */
+function useIsDesktop(): boolean {
+  const [isDesktop, setIsDesktop] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const onChange = () => setIsDesktop(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  return isDesktop;
+}
 
 const CheckBox: React.FC<{ checked: boolean; onChange: () => void; label?: string }> = ({
   checked, onChange, label,
@@ -32,13 +44,23 @@ const CheckBox: React.FC<{ checked: boolean; onChange: () => void; label?: strin
   </button>
 );
 
-export const CartPanel: React.FC<CartPanelProps> = ({ isOpen, onClose, conversationId }) => {
+export const CartPanel: React.FC<CartPanelProps> = ({ conversationId }) => {
   const cart          = useAppStore((s) => s.cart);
   const removeFromCart= useAppStore((s) => s.removeFromCart);
   const updateQuantity= useAppStore((s) => s.updateQuantity);
+  const isOpen        = useAppStore((s) => s.cartOpen);
+  const requestedStep = useAppStore((s) => s.cartStep);
+  const closeCart     = useAppStore((s) => s.closeCart);
+  const isDesktop     = useIsDesktop();
 
   const [step, setStep]           = useState<Step>('cart');
   const [summaryOpen, setSummaryOpen] = useState(false);
+
+  // Adopt the step the opener asked for (e.g. a chat card opening straight to
+  // the checkout form).
+  useEffect(() => {
+    if (isOpen) setStep(requestedStep);
+  }, [isOpen, requestedStep]);
   // Track *deselected* ids (default: everything selected). This way a newly
   // added cart item is automatically included without any reconcile guesswork.
   const [deselectedIds, setDeselectedIds] = useState<Set<string>>(() => new Set());
@@ -71,7 +93,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({ isOpen, onClose, conversat
   const toggleAll = () =>
     setDeselectedIds(allSelected ? new Set(cart.map((i) => i.product_id)) : new Set());
 
-  const resetAndClose = () => { setStep('cart'); onClose(); };
+  const resetAndClose = () => { setStep('cart'); closeCart(); };
 
   // Shared checkout state/logic — identical to the in-chat InlineCheckout card.
   const checkout = useCheckoutForm({
@@ -81,22 +103,10 @@ export const CartPanel: React.FC<CartPanelProps> = ({ isOpen, onClose, conversat
   });
   const { totalAmount } = checkout;
 
-  return (
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          key="cart-panel"
-          initial={{ width: 0, opacity: 0 }}
-          animate={{ width: 460, opacity: 1 }}
-          exit={{ width: 0, opacity: 0 }}
-          transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
-          className="h-full shrink-0 overflow-hidden border-l border-pink-100/50 z-30"
-          style={{
-            background: 'linear-gradient(160deg, #fff5fe 0%, #fce8ff 30%, #f3e8ff 60%, #fdf4ff 100%)',
-          }}
-        >
-          {/* Inner fixed-width wrapper prevents reflow during animation */}
-          <div className="w-[460px] h-full flex flex-col">
+  const panelBg = 'linear-gradient(160deg, #fff5fe 0%, #fce8ff 30%, #f3e8ff 60%, #fdf4ff 100%)';
+
+  const body = (
+    <div className="flex h-full w-full flex-col">
 
             {/* ── Header ── */}
             <div className="flex items-center justify-between px-4 py-3.5 border-b border-pink-100/50 bg-white/50 backdrop-blur-sm shrink-0">
@@ -293,8 +303,51 @@ export const CartPanel: React.FC<CartPanelProps> = ({ isOpen, onClose, conversat
                 </div>
               </>
             )}
-          </div>
-        </motion.div>
+    </div>
+  );
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        isDesktop ? (
+          /* Desktop: inline side panel that expands from the right */
+          <motion.div
+            key="cart-panel-desktop"
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: 460, opacity: 1 }}
+            exit={{ width: 0, opacity: 0 }}
+            transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+            className="h-full shrink-0 overflow-hidden border-l border-pink-100/50 z-30"
+            style={{ background: panelBg }}
+          >
+            {/* Inner fixed-width wrapper prevents reflow during the width animation */}
+            <div className="w-[460px] h-full">{body}</div>
+          </motion.div>
+        ) : (
+          /* Mobile: full-screen bottom sheet (slide-up) with a tap-to-dismiss backdrop */
+          <>
+            <motion.div
+              key="cart-sheet-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={resetAndClose}
+              className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+            />
+            <motion.div
+              key="cart-sheet"
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', stiffness: 320, damping: 34 }}
+              className="fixed inset-x-0 bottom-0 top-[7%] z-50 flex flex-col overflow-hidden rounded-t-3xl border-t border-pink-100/60 shadow-2xl pb-[env(safe-area-inset-bottom)]"
+              style={{ background: panelBg }}
+            >
+              <div className="mx-auto mt-2 h-1.5 w-10 shrink-0 rounded-full bg-pink-200/70" />
+              {body}
+            </motion.div>
+          </>
+        )
       )}
     </AnimatePresence>
   );

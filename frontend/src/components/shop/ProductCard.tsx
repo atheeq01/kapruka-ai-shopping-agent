@@ -107,7 +107,7 @@ const HoverPanel: React.FC<HoverPanelProps> = ({ product, onClose }) => {
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.96, y: 6 }}
       transition={{ duration: 0.18, ease: 'easeOut' }}
-      className="flex overflow-hidden rounded-2xl bg-violet-50 shadow-2xl shadow-violet-950/15 border border-violet-100"
+      className="flex overflow-hidden rounded-2xl bg-white shadow-2xl shadow-primary-950/10 border border-primary-100"
       style={{ width: 520 }}
     >
       {/* Left side: Product Image Showcase */}
@@ -169,7 +169,7 @@ const HoverPanel: React.FC<HoverPanelProps> = ({ product, onClose }) => {
 
         {/* Category tag overlay */}
         {product.category && (
-          <span className="absolute left-2.5 top-2.5 rounded-full bg-violet-100/80 backdrop-blur-sm px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-violet-700">
+          <span className="absolute left-2.5 top-2.5 rounded-full bg-primary-100/80 backdrop-blur-sm px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-primary-700">
             {product.category}
           </span>
         )}
@@ -186,7 +186,8 @@ const HoverPanel: React.FC<HoverPanelProps> = ({ product, onClose }) => {
             <button
               type="button"
               onClick={onClose}
-              className="shrink-0 rounded-full p-1 text-violet-400 hover:bg-violet-100 hover:text-violet-600 transition-all active:scale-90"
+              aria-label="Close quick view"
+              className="shrink-0 rounded-full p-1 text-gray-400 hover:bg-primary-50 hover:text-primary-600 transition-all active:scale-90"
             >
               <X size={14} />
             </button>
@@ -195,7 +196,7 @@ const HoverPanel: React.FC<HoverPanelProps> = ({ product, onClose }) => {
 
         {/* Title */}
         <div className="min-w-0 mt-1">
-          <h3 className="text-base font-bold text-kapruka-dark leading-snug tracking-tight hover:text-violet-600 cursor-pointer" onClick={openProduct}>
+          <h3 className="text-base font-bold text-kapruka-dark leading-snug tracking-tight hover:text-primary-600 cursor-pointer" onClick={openProduct}>
             {product.name}
           </h3>
         </div>
@@ -271,11 +272,12 @@ const HoverPanel: React.FC<HoverPanelProps> = ({ product, onClose }) => {
               onClick={(e) => { e.stopPropagation(); if (sel.hasVariants || product.isCake) sel.add(); else sel.toggleSimple(); }}
               disabled={!sel.inStock}
               className={cn(
-                'flex w-full items-center justify-center gap-1.5 rounded-xl py-3 text-xs font-bold transition-all active:scale-95 shadow-md shadow-violet-100',
+                'flex w-full items-center justify-center gap-1.5 rounded-xl py-3 text-xs font-bold transition-all active:scale-95 shadow-md',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 focus-visible:ring-offset-1',
                 'disabled:cursor-not-allowed disabled:opacity-40',
                 sel.isSelected
                   ? 'bg-kapruka-orange text-white hover:bg-kapruka-orange/90'
-                  : 'bg-violet-600 text-white hover:bg-violet-700',
+                  : 'btn-primary',
               )}
             >
               {sel.isSelected ? <Check size={13} strokeWidth={3} /> : <ShoppingCart size={13} />}
@@ -365,7 +367,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index, view }
         </div>
         <div className="min-w-0 flex-1">
           <p
-            className={cn('truncate text-sm font-medium text-kapruka-dark', product.url && 'cursor-pointer hover:text-violet-700')}
+            className={cn('truncate text-sm font-medium text-kapruka-dark', product.url && 'cursor-pointer hover:text-primary-700')}
             onClick={openProduct}
           >
             {product.name}
@@ -380,7 +382,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index, view }
           )}
         </div>
         {sel.hasVariants && <QtyStepper qty={sel.qty} setQty={sel.setQty} />}
-        <span className="shrink-0 text-sm font-bold text-violet-700">
+        <span className="shrink-0 text-sm font-bold text-gray-900">
           Rs. {sel.price.toLocaleString()}
         </span>
         <button
@@ -411,9 +413,15 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index, view }
         whileHover={{ y: -4 }}
         onMouseEnter={showPanel}
         onMouseLeave={hidePanel}
+        onFocus={showPanel}
+        onBlur={hidePanel}
         onClick={openProduct}
+        tabIndex={0}
+        role="group"
+        aria-label={product.name}
         className={cn(
-          'group relative flex flex-col bg-white transition-all duration-300 rounded-2xl border border-gray-100 overflow-hidden hover:shadow-lg hover:shadow-violet-100/80 hover:-translate-y-1',
+          'group relative flex flex-col bg-white transition-all duration-300 rounded-2xl border border-gray-100 overflow-hidden hover:shadow-lg hover:shadow-primary-100/80 hover:-translate-y-1',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2',
           product.url && 'cursor-pointer',
           sel.isSelected ? 'ring-2 ring-inset ring-kapruka-orange' : '',
         )}
@@ -439,17 +447,22 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index, view }
           )}
 
           {!sel.hasVariants && (
-            <div className="absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/30 via-transparent to-transparent p-3 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+            /* Touch parity (Bug 6): the action is visible by default; on
+               hover-capable devices it stays hidden until hover/focus, on touch
+               it's always shown so there's no hover-only dead end. */
+            <div className="absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/30 via-transparent to-transparent p-3 opacity-100 transition-opacity duration-300 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); sel.toggleSimple(); }}
                 disabled={!sel.inStock}
+                aria-label={sel.isSelected ? `Remove ${product.name} from cart` : `Add ${product.name} to cart`}
                 className={cn(
                   'flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold shadow-lg transition-all active:scale-95',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300',
                   'disabled:cursor-not-allowed disabled:opacity-40',
                   sel.isSelected
                     ? 'bg-kapruka-orange text-white'
-                    : 'bg-white text-kapruka-dark hover:bg-violet-600 hover:text-white',
+                    : 'bg-white text-kapruka-dark hover:bg-primary-600 hover:text-white',
                 )}
               >
                 {sel.isSelected ? <Check size={12} strokeWidth={3} /> : <Plus size={12} strokeWidth={3} />}
@@ -461,7 +474,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index, view }
 
         <div className="flex flex-1 flex-col p-3">
           <p className="line-clamp-2 text-sm font-medium leading-snug text-kapruka-dark">{product.name}</p>
-          <p className="mt-1 font-bold text-violet-700">Rs. {sel.price.toLocaleString()}</p>
+          <p className="mt-1 font-bold text-gray-900">Rs. {sel.price.toLocaleString()}</p>
           <p className={cn('mt-0.5 text-xs', sel.inStock ? 'text-kapruka-green' : 'text-gray-400')}>
             {sel.inStock ? '● In Stock' : 'Out of Stock'}
           </p>
@@ -493,10 +506,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index, view }
                   disabled={!sel.inStock}
                   className={cn(
                     'flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-all active:scale-95',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300',
                     'disabled:cursor-not-allowed disabled:opacity-40',
                     sel.isSelected
                       ? 'bg-kapruka-orange text-white hover:bg-kapruka-orange/90'
-                      : 'bg-violet-600 text-white hover:bg-violet-700',
+                      : 'btn-primary',
                   )}
                 >
                   {sel.isSelected ? <Check size={13} strokeWidth={3} /> : <ShoppingCart size={13} />}

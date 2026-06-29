@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { Minus, Plus } from 'lucide-react';
 import { useAppStore } from '../../store/cartStore';
 import { cn } from '../../lib/utils';
@@ -15,6 +15,12 @@ export function useProductSelection(product: NormalizedProduct) {
   const cart = useAppStore((s) => s.cart);
   const addToCart = useAppStore((s) => s.addToCart);
   const removeFromCart = useAppStore((s) => s.removeFromCart);
+  const updateQuantity = useAppStore((s) => s.updateQuantity);
+  // Single source of truth for this product's draft selection. Every surface
+  // (card, hover quick-view, detail card) reads the same store-backed value,
+  // so a quantity/size/icing change in one place is reflected in all of them.
+  const selection = useAppStore((s) => s.selections[product.id]);
+  const setSelection = useAppStore((s) => s.setSelection);
 
   // Memoize so the array reference is stable across renders (keeps the
   // useMemo below from recomputing — and re-running effects — every render).
@@ -25,10 +31,24 @@ export function useProductSelection(product: NormalizedProduct) {
     () => variants.find((v) => v.inStock) ?? variants[0],
     [variants],
   );
-  const [size, setSize] = useState<string | undefined>(firstAvailable?.label);
-  const [qty, setQty] = useState(1);
-  // Optional iced-on greeting for cakes (becomes the cart item's icing_text).
-  const [icing, setIcing] = useState('');
+
+  const inCart = cart.find((c) => c.product_id === product.id);
+  const isSelected = Boolean(inCart);
+
+  // Resolve current values from the shared store, falling back to sane defaults.
+  const size = selection?.size ?? inCart?.size ?? firstAvailable?.label;
+  const icing = selection?.icing ?? inCart?.icing_text ?? '';
+  // Once an item is in the cart its quantity IS the cart quantity, so editing it
+  // here updates the cart badge + subtotal everywhere instantly.
+  const qty = inCart ? inCart.quantity : selection?.qty ?? 1;
+
+  const setSize = (label: string) => setSelection(product.id, { size: label });
+  const setIcing = (v: string) => setSelection(product.id, { icing: v });
+  const setQty = (n: number) => {
+    const next = Math.max(1, Math.min(99, n));
+    setSelection(product.id, { qty: next });
+    if (inCart) updateQuantity(product.id, next);
+  };
 
   const activeVariant: ProductVariant | undefined = hasVariants
     ? variants.find((v) => v.label === size) ?? firstAvailable
@@ -36,8 +56,6 @@ export function useProductSelection(product: NormalizedProduct) {
 
   const price = activeVariant?.price ?? product.price;
   const inStock = activeVariant ? activeVariant.inStock : product.inStock;
-  const inCart = cart.find((c) => c.product_id === product.id);
-  const isSelected = Boolean(inCart);
 
   const trimmedIcing = icing.trim();
 
@@ -94,7 +112,7 @@ export const IcingInput: React.FC<{ value: string; onChange: (v: string) => void
       onChange={(e) => onChange(e.target.value)}
       onClick={(e) => e.stopPropagation()}
       placeholder='e.g. "Happy Birthday Amma"'
-      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none transition-colors focus:border-violet-400 focus:ring-2 focus:ring-violet-200"
+      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none transition-colors focus:border-primary-400 focus:ring-2 focus:ring-primary-200"
     />
   </div>
 );
@@ -113,10 +131,10 @@ export const SizePicker: React.FC<{
         onClick={() => onSelect(v.label)}
         className={cn(
           'rounded-md border px-2.5 py-1 text-xs font-semibold transition-all active:scale-95',
-          'disabled:cursor-not-allowed disabled:opacity-40',
+          'disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300',
           size === v.label
-            ? 'border-violet-600 bg-violet-600 text-white'
-            : 'border-gray-200 text-gray-600 hover:border-violet-400 hover:text-violet-600',
+            ? 'border-primary-600 bg-primary-600 text-white'
+            : 'border-gray-200 text-gray-600 hover:border-primary-400 hover:text-primary-600',
         )}
       >
         {v.label}
@@ -134,7 +152,7 @@ export const QtyStepper: React.FC<{ qty: number; setQty: (n: number) => void }> 
       type="button"
       onClick={() => setQty(Math.max(1, qty - 1))}
       disabled={qty <= 1}
-      className="px-2 py-1.5 text-gray-500 transition-colors hover:text-violet-600 disabled:opacity-30"
+      className="px-2 py-1.5 text-gray-500 transition-colors hover:text-primary-600 disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 rounded-l-lg"
       aria-label="Decrease quantity"
     >
       <Minus size={13} />
@@ -143,7 +161,7 @@ export const QtyStepper: React.FC<{ qty: number; setQty: (n: number) => void }> 
     <button
       type="button"
       onClick={() => setQty(Math.min(99, qty + 1))}
-      className="px-2 py-1.5 text-gray-500 transition-colors hover:text-violet-600"
+      className="px-2 py-1.5 text-gray-500 transition-colors hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 rounded-r-lg"
       aria-label="Increase quantity"
     >
       <Plus size={13} />

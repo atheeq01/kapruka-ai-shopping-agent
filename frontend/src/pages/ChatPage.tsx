@@ -24,7 +24,11 @@ export const ChatPage: React.FC = () => {
   const navigate = useNavigate();
   const conversation = useAppStore((s) => (id ? s.conversations[id] : undefined));
   const cartCount = useAppStore((s) => s.cart.reduce((acc, i) => acc + i.quantity, 0));
-  const [isCartOpen, setIsCartOpen] = useState(false);
+  // Cart drawer open/step lives in the store so any in-chat card (e.g. the
+  // compact checkout summary) can open the single checkout surface.
+  const isCartOpen = useAppStore((s) => s.cartOpen);
+  const openCart = useAppStore((s) => s.openCart);
+  const closeCart = useAppStore((s) => s.closeCart);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -81,7 +85,7 @@ export const ChatPage: React.FC = () => {
           <div className="flex items-center gap-2">
           <LanguageToggle className="hidden sm:flex" />
           <button
-            onClick={() => setIsCartOpen((v) => !v)}
+            onClick={() => (isCartOpen ? closeCart() : openCart('cart'))}
             className="relative flex items-center gap-1.5 bg-white/90 border border-gray-100 rounded-full px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-white shadow-sm transition-all duration-200 hover:scale-105 active:scale-95"
           >
             <ShoppingBag size={13} />
@@ -105,8 +109,8 @@ export const ChatPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Input */}
-        <div className="px-4 md:px-8 py-4 pb-6 chat-footer">
+        {/* Input — sticky-feel footer, safe-area aware so it never sits under the home bar */}
+        <div className="px-4 md:px-8 py-4 chat-footer pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           <div className={containerClass}>
             <PromptInput
               placeholder="Ask me anything — flowers, cakes, gifts..."
@@ -117,12 +121,8 @@ export const ChatPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Inline cart panel (no overlay, expands from right) */}
-      <CartPanel
-        isOpen={isCartOpen}
-        onClose={() => setIsCartOpen(false)}
-        conversationId={id}
-      />
+      {/* Single checkout surface: side panel on desktop, bottom sheet on mobile */}
+      <CartPanel conversationId={id} />
     </div>
   );
 };
