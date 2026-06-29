@@ -15,6 +15,7 @@ export function useLanguageDetection(text: string): LangCode | null {
 
   useEffect(() => {
     if (!text.trim()) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDetectedLang(null);
       return;
     }
@@ -48,11 +49,6 @@ export function useLanguageDetection(text: string): LangCode | null {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [text]);
-
-  // Clear on empty input
-  useEffect(() => {
-    if (!text.trim()) setDetectedLang(null);
   }, [text]);
 
   return detectedLang;

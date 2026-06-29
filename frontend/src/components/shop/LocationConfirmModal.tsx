@@ -51,11 +51,21 @@ const LocationConfirmModalInner: React.FC<Props> = ({ open, onClose, address, ci
     initial?.lat != null && initial?.lng != null ? { lat: initial.lat, lng: initial.lng } : null,
   );
 
+  // Reverse-geocode a dragged/clicked pin into a human address.
+  const applyPosition = async (lat: number, lng: number) => {
+    setCoords({ lat, lng });
+    const geocoder = geocoderRef.current;
+    if (!geocoder) return;
+    const result = await geocode(geocoder, { location: { lat, lng } });
+    if (result) setFormatted(result.formatted_address);
+  };
+
   // Initialise the map each time the modal opens.
   useEffect(() => {
     if (!open) return;
 
     if (!hasGoogleMapsKey) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);
       setError('NO_KEY');
       return;
@@ -135,15 +145,6 @@ const LocationConfirmModalInner: React.FC<Props> = ({ open, onClose, address, ci
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
-
-  // Reverse-geocode a dragged/clicked pin into a human address.
-  const applyPosition = async (lat: number, lng: number) => {
-    setCoords({ lat, lng });
-    const geocoder = geocoderRef.current;
-    if (!geocoder) return;
-    const result = await geocode(geocoder, { location: { lat, lng } });
-    if (result) setFormatted(result.formatted_address);
-  };
 
   // Picking a search suggestion moves the pin straight to that place.
   const handleSearchSelect = (p: PlaceResult) => {

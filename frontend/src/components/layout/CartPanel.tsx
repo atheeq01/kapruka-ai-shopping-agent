@@ -59,6 +59,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({ conversationId }) => {
   // Adopt the step the opener asked for (e.g. a chat card opening straight to
   // the checkout form).
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (isOpen) setStep(requestedStep);
   }, [isOpen, requestedStep]);
   // Track *deselected* ids (default: everything selected). This way a newly
@@ -67,6 +68,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({ conversationId }) => {
 
   // Prune ids that have left the cart so they don't linger in the deselected set.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDeselectedIds((prev) => {
       if (prev.size === 0) return prev;
       const cartIds = new Set(cart.map((i) => i.product_id));

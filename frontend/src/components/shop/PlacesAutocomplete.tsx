@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useRef } from 'react';
 import { loadGoogleMaps, hasGoogleMapsKey } from '../../lib/googleMaps';
 
 export interface PlaceResult {
@@ -35,7 +35,7 @@ export const PlacesAutocomplete: React.FC<Props> = ({ onSelect, className }) => 
   // Keep the latest handler in a ref so the element isn't torn down and
   // recreated when the parent passes a new closure (advanced-use-latest).
   const onSelectRef = useRef(onSelect);
-  onSelectRef.current = onSelect;
+  useLayoutEffect(() => { onSelectRef.current = onSelect; });
 
   useEffect(() => {
     if (!hasGoogleMapsKey) return;
