@@ -53,9 +53,14 @@ export const ChatPage: React.FC = () => {
     !lastMessage.products?.length;
 
   const isAnyPanelOpen = isSidebarOpen || isCartOpen;
+  // Centered, width-capped reading column. It widens with the viewport up to a
+  // comfortable ceiling (so product grids get room on laptops/wide screens) but
+  // never sprawls edge-to-edge on big monitors.
   const containerClass = cn(
-    "mx-auto flex flex-col transition-all duration-700 ease-in-out w-full @container",
-    isAnyPanelOpen ? "max-w-4xl" : "max-w-4xl lg:max-w-[75%]"
+    "mx-auto flex flex-col transition-all duration-500 ease-in-out w-full @container",
+    isAnyPanelOpen
+      ? "max-w-3xl xl:max-w-4xl"
+      : "max-w-3xl lg:max-w-5xl 2xl:max-w-6xl"
   );
 
   return (

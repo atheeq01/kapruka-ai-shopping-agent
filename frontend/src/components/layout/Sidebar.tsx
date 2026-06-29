@@ -187,7 +187,9 @@ export const Sidebar: React.FC<{ onPanelChange?: (isOpen: boolean) => void }> = 
               animate={{ width: 204, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
               transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-              className="h-full overflow-hidden"
+              /* Mobile/tablet: float over the chat so it never crushes the
+                 reading column. lg+: inline rail panel that pushes content. */
+              className="overflow-hidden fixed left-[62px] top-[58px] bottom-0 z-40 bg-white/95 backdrop-blur-xl shadow-2xl lg:static lg:h-full lg:top-auto lg:bottom-auto lg:left-auto lg:z-auto lg:bg-transparent lg:backdrop-blur-0 lg:shadow-none"
             >
               <div className="w-[204px] h-full flex flex-col py-3 overflow-hidden">
 

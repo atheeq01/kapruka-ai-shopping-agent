@@ -153,16 +153,19 @@ export const CartPanel: React.FC<CartPanelProps> = ({ conversationId }) => {
                     </div>
                   ) : (
                     <>
-                      {/* Select-all bar */}
+                      {/* Select-all bar — CheckBox and label are sibling buttons
+                          (not nested) to keep valid, a11y-friendly markup. */}
                       <div className="flex items-center justify-between px-1 pb-1">
-                        <button
-                          type="button"
-                          onClick={toggleAll}
-                          className="flex items-center gap-2 text-xs font-semibold text-gray-600 hover:text-pink-500 transition-colors"
-                        >
+                        <div className="flex items-center gap-2">
                           <CheckBox checked={allSelected} onChange={toggleAll} label="Select all items" />
-                          {allSelected ? 'Deselect all' : 'Select all'}
-                        </button>
+                          <button
+                            type="button"
+                            onClick={toggleAll}
+                            className="text-xs font-semibold text-gray-600 hover:text-pink-500 transition-colors"
+                          >
+                            {allSelected ? 'Deselect all' : 'Select all'}
+                          </button>
+                        </div>
                         <span className="text-[11px] font-medium text-gray-400">
                           {selectedCount} of {cart.length} selected
                         </span>
