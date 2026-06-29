@@ -61,10 +61,13 @@ export function useProductSelection(product: NormalizedProduct) {
 
   const add = () => {
     // Always replace so the cart reflects the latest size/quantity/icing choice.
+    // Honour the chosen quantity for every product — the quick-view and detail
+    // card expose a stepper for simple products too, so forcing 1 here silently
+    // dropped the user's choice.
     removeFromCart(product.id);
     addToCart({
       product_id: product.id,
-      quantity: hasVariants ? qty : 1,
+      quantity: qty,
       name: activeVariant ? `${product.name} (${activeVariant.label})` : product.name,
       price,
       image: product.image,

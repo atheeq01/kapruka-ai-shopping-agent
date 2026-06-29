@@ -79,13 +79,60 @@ def _clean_description(text: Any, product_id: str = "", name: str = "") -> str:
 
 
 def _price_amount(price: Any) -> float:
-    """Accept either a {'amount': n} object or a bare number."""
+    """
+    Coerce a loosely-typed price into a number. The catalogue feed is
+    inconsistent: a price can be a bare number, a numeric string ("Rs. 3,500.00"),
+    or a money object whose value sits under any of several keys
+    ({'amount': …} | {'value': …} | {'selling_price': …}). Returns 0.0 only when
+    nothing parseable is present.
+    """
+    if price is None:
+        return 0.0
     if isinstance(price, dict):
-        return float(price.get("amount") or 0)
+        for key in ("amount", "value", "selling_price", "sale_price", "price",
+                    "unit_price", "min", "min_price"):
+            if price.get(key) is not None:
+                amt = _price_amount(price.get(key))
+                if amt > 0:
+                    return amt
+        return 0.0
+    if isinstance(price, str):
+        # Pull the first numeric token so currency text / stray dots ("Rs. 3,500.00")
+        # don't corrupt the parse.
+        m = re.search(r"\d[\d,]*(?:\.\d+)?", price)
+        if not m:
+            return 0.0
+        try:
+            return float(m.group(0).replace(",", ""))
+        except ValueError:
+            return 0.0
     try:
         return float(price)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _resolve_price(obj: dict, variants: list[dict]) -> float:
+    """
+    Best-effort base price for a product. Tries the top-level ``price``, then
+    common alternate / nested keys, then falls back to the cheapest variant
+    price — which is what fixes the "Rs. 0" cards whose price only lived on a
+    single (un-surfaced) default variant.
+    """
+    price = _price_amount(obj.get("price"))
+    if price > 0:
+        return price
+    for key in ("selling_price", "sale_price", "unit_price", "current_price",
+                "min_price", "price_lkr", "amount"):
+        price = _price_amount(obj.get(key))
+        if price > 0:
+            return price
+    pricing = obj.get("pricing") if isinstance(obj.get("pricing"), dict) else {}
+    price = _price_amount(pricing)
+    if price > 0:
+        return price
+    variant_prices = [v["price"] for v in variants if v.get("price", 0) > 0]
+    return min(variant_prices) if variant_prices else 0.0
 
 
 # Category slugs / type hints that drive product-specific UI affordances.
@@ -178,7 +225,9 @@ def _product_from_json(obj: dict) -> Optional[dict]:
     product: dict = {
         "id": pid or "product-detail",
         "name": name,
-        "price": _price_amount(obj.get("price")),
+        # Resolve from top-level / alternate / nested keys, then fall back to the
+        # cheapest variant so single-variant products don't render as "Rs. 0".
+        "price": _resolve_price(obj, variants),
         "currency": (obj.get("price") or {}).get("currency", "LKR") if isinstance(obj.get("price"), dict) else "LKR",
         "inStock": bool(obj.get("in_stock", True)),
         "category": category or "Product",

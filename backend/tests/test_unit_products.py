@@ -70,6 +70,36 @@ def test_parse_search_json_empty_on_garbage():
     assert parse_search_json("") == []
 
 
+def test_parse_search_json_price_from_single_variant():
+    """A product whose price only lives on a lone default variant must not be Rs. 0."""
+    payload = json.dumps({"results": [{
+        "id": "FLW6", "name": "6 Red Rose Bouquet With Elegant Wrapping",
+        "price": {"amount": 0},  # top-level price missing/zero
+        "variants": [
+            {"name": "Default", "price": {"amount": 4500}, "attributes": {"weight": "0"}},
+        ],
+    }]})
+    p = parse_search_json(payload)[0]
+    assert p["price"] == 4500
+    # A single (default) variant should not surface as a size choice.
+    assert "variants" not in p
+
+
+def test_parse_search_json_price_string_and_alt_key():
+    payload = json.dumps({"results": [{
+        "id": "X2", "name": "Comma Priced", "price": None, "selling_price": "Rs. 3,500.00",
+    }]})
+    assert parse_search_json(payload)[0]["price"] == 3500
+
+
+def test_price_amount_handles_string_and_nested():
+    from app.services.products import _price_amount
+    assert _price_amount("LKR 12,345.50") == 12345.5
+    assert _price_amount({"value": "2,000"}) == 2000
+    assert _price_amount(None) == 0.0
+    assert _price_amount("free") == 0.0
+
+
 # ── Product detail parsing ───────────────────────────────────────────────────
 
 def test_parse_product_detail_json_unwraps_product_key():

@@ -51,7 +51,7 @@ export const ProductDetailCard: React.FC<ProductDetailCardProps> = ({ product: r
   const [imgError, setImgError] = useState(false);
   const [descOpen, setDescOpen] = useState(false);
 
-  const lineTotal = sel.price * (sel.hasVariants ? sel.qty : 1);
+  const lineTotal = sel.price * sel.qty;
   const stockLabel = product.stockLevel ? STOCK_LABELS[product.stockLevel] ?? 'In Stock' : null;
   const lowStock = product.stockLevel === 'low';
   // Cakes can re-add to refresh the icing text, so prefer add() over a simple toggle.
@@ -211,9 +211,9 @@ export const ProductDetailCard: React.FC<ProductDetailCardProps> = ({ product: r
             </button>
           </div>
 
-          {((sel.hasVariants && sel.qty > 1) || (product.isCake && sel.icing.trim())) && (
+          {((sel.qty > 1) || (product.isCake && sel.icing.trim())) && (
             <div className="mt-2 space-y-0.5">
-              {sel.hasVariants && sel.qty > 1 && (
+              {sel.qty > 1 && (
                 <p className="text-xs text-gray-500">
                   Total for {sel.qty}:{' '}
                   <span className="font-semibold text-kapruka-dark">Rs. {lineTotal.toLocaleString()}</span>
