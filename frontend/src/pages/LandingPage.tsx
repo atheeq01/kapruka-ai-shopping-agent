@@ -143,14 +143,14 @@ export const LandingPage: React.FC = () => {
             className="text-center mb-8"
           >
             <h1 className="text-3xl md:text-[2.6rem] font-medium leading-snug text-gray-400 max-w-xl">
-              AI Powers{' '}
-              <strong className="font-extrabold text-gray-800">Easy Shopping</strong>{' '}
-              And
+              Your Intelligent
               <br />
-              <strong className="font-extrabold text-gray-800">Voice Access</strong>
+              <strong className="font-extrabold text-gray-800">Shopping Assistant</strong>
             </h1>
-            <p className="mt-3 text-sm text-gray-400">
-              Flowers, cakes, gifts &amp; more — delivered across Sri Lanka
+            <p className="mt-3 text-base md:text-lg text-gray-400">
+              <span className="md:text-2xl">Speak or type to discover</span>
+              <br />
+              with island-wide delivery.
             </p>
           </motion.div>
 
@@ -219,7 +219,7 @@ export const LandingPage: React.FC = () => {
             <PromptInput
               size="lg"
               autoFocus
-              placeholder="Ask me anything — flowers, cakes, gifts..."
+              placeholder="Ask Kapruka ..."
               onSubmit={handleStart}
               onVoiceBlob={(blob) => {
                 const id = createConversation();
