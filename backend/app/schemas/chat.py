@@ -49,3 +49,6 @@ class GiftMessageRequest(BaseModel):
 
 class GiftMessageResponse(BaseModel):
     message: str
+
+class TTSRequest(BaseModel):
+    text: str

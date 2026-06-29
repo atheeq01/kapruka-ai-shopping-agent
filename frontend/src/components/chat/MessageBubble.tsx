@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import { motion } from 'framer-motion';
-import { Check, Copy, ThumbsUp, Volume2 } from 'lucide-react';
+import { Check, Copy, ThumbsUp, Volume2, Loader2 } from 'lucide-react';
 import { easeOutExpo } from '../../lib/motion';
 import { cn } from '../../lib/utils';
+import { quickDetect } from '../../lib/detectLang';
 
 /**
  * Stable, deterministic waveform heights for the voice-upload shimmer.
@@ -81,9 +82,41 @@ const AiAvatar: React.FC = () => (
   <KAvatar className="self-start mt-0.5" />
 );
 
-const MessageActions: React.FC<{ content: string }> = ({ content }) => {
-  const [copied, setCopied] = useState(false);
-  const [liked, setLiked] = useState(false);
+/** Strip markdown syntax so TTS reads clean prose. */
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/```[\s\S]*?```/g, '')        // fenced code blocks
+    .replace(/`[^`]+`/g, '')               // inline code
+    .replace(/#{1,6}\s+/g, '')             // headings
+    .replace(/\*\*(.+?)\*\*/g, '$1')       // bold
+    .replace(/\*(.+?)\*/g, '$1')           // italic
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // links — keep label
+    .replace(/[_~>|]/g, '')
+    .replace(/\n+/g, ' ')
+    .trim();
+}
+
+
+
+const MessageActions: React.FC<{ content: string; lang?: string }> = ({ content, lang }) => {
+  const [copied,  setCopied]  = useState(false);
+  const [liked,   setLiked]   = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+      }
+    };
+  }, [audioUrl]);
 
   const handleCopy = async () => {
     try {
@@ -91,6 +124,50 @@ const MessageActions: React.FC<{ content: string }> = ({ content }) => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch { /* ignore */ }
+  };
+
+  const handleSpeak = async () => {
+    if (loading) return;
+
+    if (speaking) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+      setSpeaking(false);
+      return;
+    }
+
+    const plain = stripMarkdown(content);
+    if (!plain) return;
+
+    try {
+      if (!audioRef.current) {
+        let url = audioUrl;
+        if (!url) {
+          setLoading(true);
+          const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/chat/tts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: plain })
+          });
+          if (!res.ok) throw new Error('TTS failed');
+          const blob = await res.blob();
+          url = URL.createObjectURL(blob);
+          setAudioUrl(url);
+          setLoading(false);
+        }
+        audioRef.current = new Audio(url!);
+        audioRef.current.onended = () => setSpeaking(false);
+        audioRef.current.onerror = () => setSpeaking(false);
+      }
+      setSpeaking(true);
+      await audioRef.current.play();
+    } catch (e) {
+      console.error(e);
+      setLoading(false);
+      setSpeaking(false);
+    }
   };
 
   return (
@@ -101,8 +178,12 @@ const MessageActions: React.FC<{ content: string }> = ({ content }) => {
       <ActionBtn onClick={() => setLiked((v) => !v)} title="Like">
         <ThumbsUp size={12} className={liked ? 'text-pink-500 fill-pink-500' : ''} />
       </ActionBtn>
-      <ActionBtn title="Read aloud">
-        <Volume2 size={12} />
+      <ActionBtn onClick={handleSpeak} title={loading ? 'Processing voice...' : speaking ? 'Stop reading' : 'Read aloud'}>
+        {loading ? (
+          <Loader2 size={12} className="text-pink-500 animate-spin" />
+        ) : (
+          <Volume2 size={12} className={speaking ? 'text-pink-500 animate-pulse' : ''} />
+        )}
       </ActionBtn>
     </div>
   );
@@ -275,7 +356,7 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({ message, conversatio
           Boolean(message.content || message.products || message.productDetail || message.order || message.orderConfirmation || message.checkoutForm) && (
           <div className="flex items-center gap-2 mt-1 px-0.5">
             {message.lang && <LanguageBadge lang={message.lang} auto />}
-            {message.content && <MessageActions content={message.content} />}
+            {message.content && <MessageActions content={message.content} lang={message.lang} />}
             <span className="text-[10.5px] text-gray-400 ml-auto">{time}</span>
           </div>
         )}

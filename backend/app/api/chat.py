@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 from app.schemas.chat import (
     ChatRequest, DetectLangRequest, DetectLangResponse, VoiceResponse,
-    GiftMessageRequest, GiftMessageResponse,
+    GiftMessageRequest, GiftMessageResponse, TTSRequest,
 )
 from app.services.agent import process_chat
 from app.services.language import quick_detect, detect_language
@@ -249,3 +249,70 @@ async def process_audio(audio: UploadFile = File(...)):
     except Exception as e:
         print(f"[audio] Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/tts")
+@router.post("/chat/tts")
+async def process_tts(request: TTSRequest):
+    """Generates audio from text using Gemini TTS."""
+    from google.genai import types as gtypes
+    from app.services.agent import _get_client
+    import struct
+
+    if not request.text or not request.text.strip():
+        raise HTTPException(status_code=400, detail="Text cannot be empty")
+        
+    client = _get_client()
+    try:
+        response = await client.aio.models.generate_content(
+            model="gemini-3.1-flash-tts-preview",
+            contents=request.text,
+            config=gtypes.GenerateContentConfig(
+                response_modalities=["AUDIO"],
+                speech_config=gtypes.SpeechConfig(
+                    voice_config=gtypes.VoiceConfig(
+                        prebuilt_voice_config=gtypes.PrebuiltVoiceConfig(
+                            voice_name="Aoede",
+                        )
+                    )
+                )
+            )
+        )
+        
+        pcm_data = b""
+        for part in response.candidates[0].content.parts:
+            if part.inline_data and part.inline_data.data:
+                pcm_data += part.inline_data.data
+        
+        if not pcm_data:
+            raise HTTPException(status_code=500, detail="No audio returned from Gemini")
+
+        # Create WAV header for 24kHz 16-bit mono PCM
+        sample_rate = 24000
+        num_channels = 1
+        bits_per_sample = 16
+        data_size = len(pcm_data)
+        
+        header = b'RIFF'
+        header += struct.pack('<I', 36 + data_size)
+        header += b'WAVE'
+        header += b'fmt '
+        header += struct.pack('<I', 16) # Subchunk1Size
+        header += struct.pack('<H', 1)  # AudioFormat (PCM)
+        header += struct.pack('<H', num_channels)
+        header += struct.pack('<I', sample_rate)
+        byte_rate = sample_rate * num_channels * bits_per_sample // 8
+        header += struct.pack('<I', byte_rate)
+        block_align = num_channels * bits_per_sample // 8
+        header += struct.pack('<H', block_align)
+        header += struct.pack('<H', bits_per_sample)
+        header += b'data'
+        header += struct.pack('<I', data_size)
+
+        wav_data = header + pcm_data
+        
+        from fastapi.responses import Response
+        return Response(content=wav_data, media_type="audio/wav")
+    except Exception as e:
+        print(f"[tts] Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
