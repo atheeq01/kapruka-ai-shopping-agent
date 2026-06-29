@@ -30,6 +30,16 @@ _OG_IMAGE_RE = re.compile(
     r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
     re.IGNORECASE,
 )
+# Price recovery from a product page (search results often omit price; it only
+# lives on the detail page — e.g. "RS.6,880"). Prefer the canonical machine-
+# readable sources (meta / JSON-LD) over scraping visible text.
+_META_PRICE_RE = re.compile(
+    r'<meta[^>]+(?:property|name)=["\'](?:product:price:amount|og:price:amount|price)["\']'
+    r'[^>]+content=["\']\s*([\d,]+(?:\.\d+)?)\s*["\']',
+    re.IGNORECASE,
+)
+_JSONLD_PRICE_RE = re.compile(r'"price"\s*:\s*"?\s*([\d,]+(?:\.\d+)?)\s*"?', re.IGNORECASE)
+_VISIBLE_PRICE_RE = re.compile(r'(?:LKR|Rs)\.?\s*([\d,]+(?:\.\d+)?)', re.IGNORECASE)
 # Captures inline image URLs from MCP markdown:
 #   ![alt](url)  or  Image: url  or  Image URL: url
 _INLINE_IMG_RE = re.compile(
@@ -744,31 +754,65 @@ def parse_order(md: str) -> Optional[dict]:
     return order
 
 
-# ── Image enrichment (fallback for products without inline image) ─────────────
+# ── Product-page enrichment (recover missing image AND price) ─────────────────
+# Kapruka SEARCH results frequently omit the price (and sometimes the image) —
+# those only live on the product detail page. So for any result still missing a
+# price or image we fetch its page once and pull both out, concurrently.
 
-async def _fetch_image(client: httpx.AsyncClient, product: dict) -> None:
-    if product.get("image"):  # already has inline image — skip scrape
-        return
+def _price_from_html(html: str) -> float:
+    """Extract a product price from page HTML. Prefers meta / JSON-LD over visible text."""
+    for rx in (_META_PRICE_RE, _JSONLD_PRICE_RE):
+        m = rx.search(html)
+        if m:
+            try:
+                val = float(m.group(1).replace(",", ""))
+                if val > 0:
+                    return val
+            except ValueError:
+                pass
+    # Visible-text fallback: the main price ("RS.6,880") appears before any
+    # installment lines ("RS. 2,293 per month"), so the first match is correct.
+    m = _VISIBLE_PRICE_RE.search(html)
+    if m:
+        try:
+            return float(m.group(1).replace(",", ""))
+        except ValueError:
+            pass
+    return 0.0
+
+
+async def _enrich_one(client: httpx.AsyncClient, product: dict) -> None:
+    need_image = not product.get("image")
+    need_price = not product.get("price")  # 0 / missing
     url = product.get("url")
-    if not url:
+    if not url or not (need_image or need_price):
         return
     try:
         resp = await client.get(url, follow_redirects=True)
-        m = _OG_IMAGE_RE.search(resp.text)
-        if m:
-            product["image"] = m.group(1)
+        html = resp.text
+        if need_image:
+            m = _OG_IMAGE_RE.search(html)
+            if m:
+                product["image"] = m.group(1)
+        if need_price:
+            price = _price_from_html(html)
+            if price > 0:
+                product["price"] = price
     except Exception:
-        pass  # best-effort; card shows placeholder
+        pass  # best-effort; card shows a placeholder / hides the price
 
 
-async def enrich_with_images(products: list[dict], limit: int = 12) -> list[dict]:
-    """Concurrently attach og:image to products that don't already have an inline image."""
-    # Only scrape products missing an image
-    targets = [p for p in products[:limit] if not p.get("image")]
+async def enrich_products(products: list[dict], limit: int = 12) -> list[dict]:
+    """Concurrently backfill missing image + price from each product's page."""
+    targets = [p for p in products[:limit] if p.get("url") and (not p.get("image") or not p.get("price"))]
     if not targets:
         return products
-
     headers = {"User-Agent": "Mozilla/5.0 (compatible; KaprukaAgent/1.0)"}
     async with httpx.AsyncClient(timeout=6.0, headers=headers) as client:
-        await asyncio.gather(*(_fetch_image(client, p) for p in targets))
+        await asyncio.gather(*(_enrich_one(client, p) for p in targets))
     return products
+
+
+# Backwards-compatible alias (older callers / tests).
+async def enrich_with_images(products: list[dict], limit: int = 12) -> list[dict]:
+    return await enrich_products(products, limit)

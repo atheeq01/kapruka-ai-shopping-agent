@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Camera, Check, ChevronLeft, ChevronRight, ImageOff, Plus, ShoppingCart, Star, Users, X } from 'lucide-react';
@@ -103,16 +103,16 @@ const HoverPanel: React.FC<HoverPanelProps> = ({ product, onClose }) => {
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.96, y: 6 }}
+      initial={{ opacity: 0, scale: 0.96, y: 8 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.96, y: 6 }}
-      transition={{ duration: 0.18, ease: 'easeOut' }}
-      className="flex overflow-hidden rounded-2xl bg-white shadow-2xl shadow-primary-950/10 border border-primary-100"
-      style={{ width: 520 }}
+      exit={{ opacity: 0, scale: 0.97, y: 4 }}
+      transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+      className="flex overflow-hidden rounded-2xl bg-white shadow-2xl shadow-primary-900/20 ring-1 ring-primary-100/80 border border-white"
+      style={{ width: 500, transformOrigin: 'center' }}
     >
       {/* Left side: Product Image Showcase */}
       <div
-        className="relative flex w-48 shrink-0 flex-col items-center bg-gray-50/50 p-4 border-r border-gray-100 cursor-pointer"
+        className="relative flex w-48 shrink-0 flex-col items-center justify-center gap-3 bg-gray-50/50 p-4 border-r border-gray-100 cursor-pointer"
         onClick={openProduct}
       >
         <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-white border border-gray-100 flex items-center justify-center p-2 shadow-sm transition-transform duration-300 hover:scale-[1.02] group/img">
@@ -152,7 +152,7 @@ const HoverPanel: React.FC<HoverPanelProps> = ({ product, onClose }) => {
 
         {/* Carousel Pagination Dots */}
         {images.length > 1 && (
-          <div className="flex items-center gap-1 mt-3">
+          <div className="flex items-center gap-1">
             {images.map((_, idx) => (
               <div
                 key={idx}
@@ -220,7 +220,7 @@ const HoverPanel: React.FC<HoverPanelProps> = ({ product, onClose }) => {
         </div>
 
         {/* Divider */}
-        <div className="h-px bg-gray-100 my-3" />
+        <div className="h-px bg-gray-100 my-2.5" />
 
         {/* Summary Description Box */}
         {product.description && (
@@ -255,7 +255,7 @@ const HoverPanel: React.FC<HoverPanelProps> = ({ product, onClose }) => {
         )}
 
         {/* Divider */}
-        <div className="h-px bg-gray-100 my-3" />
+        <div className="h-px bg-gray-100 my-2.5" />
 
         {/* Quantity and Actions */}
         <div className="mt-auto">
@@ -321,35 +321,62 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index, view }
   const [hovered, setHovered] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const [panelStyle, setPanelStyle] = useState<React.CSSProperties>({});
+  const openTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const openProduct = () => {
     if (product.url) window.open(product.url, '_blank', 'noopener,noreferrer');
   };
 
-  const showPanel = () => {
-    clearTimeout(hideTimer.current);
+  const positionPanel = () => {
     if (!cardRef.current) return;
     const rect = cardRef.current.getBoundingClientRect();
-    const panelW = 520;
-    const panelH = 430;
+    const panelW = 500;
+    const panelH = 400;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
+    const margin = 12;
 
-    let left = rect.right + 4;
-    if (left + panelW > vw - 12) left = rect.left - panelW - 4;
-    if (left < 12) left = 12;
+    // Bloom out from the card's centre (not its right edge), then clamp so the
+    // panel always stays fully on-screen.
+    const cardCx = rect.left + rect.width / 2;
+    const cardCy = rect.top + rect.height / 2;
 
-    let top = rect.top;
-    if (top + panelH > vh - 12) top = Math.max(12, vh - panelH - 12);
+    let left = cardCx - panelW / 2;
+    left = Math.min(Math.max(left, margin), vw - panelW - margin);
+
+    let top = cardCy - panelH / 2;
+    top = Math.min(Math.max(top, margin), vh - panelH - margin);
 
     setPanelStyle({ top, left, width: panelW });
-    setHovered(true);
+  };
+
+  const showPanel = () => {
+    clearTimeout(hideTimer.current);
+    if (hovered) return;
+    // Hover intent: only open after a short, deliberate pause so sweeping the
+    // cursor across the grid doesn't pop a panel over every card it passes —
+    // which was making it hard to reach a different product.
+    clearTimeout(openTimer.current);
+    openTimer.current = setTimeout(() => {
+      positionPanel();
+      setHovered(true);
+    }, 150);
   };
 
   const hidePanel = () => {
-    hideTimer.current = setTimeout(() => setHovered(false), 300);
+    clearTimeout(openTimer.current); // cancel an open that hasn't fired yet
+    hideTimer.current = setTimeout(() => setHovered(false), 200);
   };
+
+  // Don't leave timers running (or call setState) after the card unmounts.
+  useEffect(
+    () => () => {
+      clearTimeout(openTimer.current);
+      clearTimeout(hideTimer.current);
+    },
+    [],
+  );
 
   if (view === 'list') {
     return (

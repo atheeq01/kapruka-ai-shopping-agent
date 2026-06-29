@@ -10,7 +10,7 @@ from app.prompts.system import KAPRUKA_AGENT_PROMPT
 from app.services.products import (
     parse_search_markdown,
     parse_search_json,
-    enrich_with_images,
+    enrich_products,
     parse_product_detail,
     parse_product_detail_json,
     parse_order,
@@ -556,11 +556,16 @@ async def process_chat(
                 try:
                     # JSON is the rich path (clean CDN images, descriptions, stock).
                     parsed = parse_search_json(output)
-                    if not parsed:
+                    if parsed:
+                        # Search results often omit price (and occasionally the
+                        # image); backfill both from each product page so cards
+                        # never render "Rs. 0".
+                        parsed = await enrich_products(parsed)
+                    else:
                         # Defensive fallback if the server returned Markdown anyway.
                         md = parse_search_markdown(output)
                         if md:
-                            parsed = await enrich_with_images(md)
+                            parsed = await enrich_products(md)
 
                     if parsed:
                         # ── Relevance guard (Task 1) ────────────────────────────
@@ -599,6 +604,8 @@ async def process_chat(
                     # prominent detail card, separate from any search-results grid.
                     detail = parse_product_detail_json(output) or parse_product_detail(output)
                     if detail:
+                        if not detail.get("price"):
+                            await enrich_products([detail])
                         yield _sse({"type": "product_detail", "item": detail})
                 except Exception as e:
                     print(f"[agent] product detail parse failed: {e}")

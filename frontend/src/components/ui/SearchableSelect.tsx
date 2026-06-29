@@ -93,33 +93,37 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   };
 
   const dropdown = open ? (
-    <div id={portalId} style={dropdownStyle} className="bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden">
-      <div className="p-2 border-b border-gray-100 flex items-center gap-2">
-        <Search size={14} className="text-gray-400 shrink-0" />
+    <div
+      id={portalId}
+      style={dropdownStyle}
+      className="overflow-hidden rounded-xl border border-pink-100 bg-white shadow-xl shadow-pink-200/40 ring-1 ring-black/[0.02]"
+    >
+      <div className="relative border-b border-pink-100/70">
+        <Search size={14} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-pink-400" />
         <input
           ref={inputRef}
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search..."
-          className="flex-1 text-sm outline-none bg-transparent"
+          placeholder="Search…"
+          className="w-full bg-transparent py-2.5 pl-10 pr-9 text-sm text-gray-700 outline-none placeholder:text-gray-400"
         />
         {query && (
-          <button onClick={() => setQuery('')} className="text-gray-400 hover:text-gray-600">
+          <button onClick={() => setQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-gray-600">
             <X size={12} />
           </button>
         )}
       </div>
-      <ul className="max-h-48 overflow-y-auto">
+      <ul className="searchable-scroll max-h-48 overflow-y-auto py-1">
         {filtered.length === 0 ? (
-          <li className="px-3 py-2 text-sm text-gray-400 text-center">No results</li>
+          <li className="px-4 py-2 text-center text-sm text-gray-400">No results</li>
         ) : (
           filtered.map((opt) => (
             <li
               key={opt}
               onMouseDown={() => select(opt)}
-              className={`px-3 py-2 text-sm cursor-pointer hover:bg-kapruka-orange hover:text-white transition-colors ${
-                opt === value ? 'bg-kapruka-orange/10 font-medium' : ''
+              className={`cursor-pointer py-2 pl-10 pr-4 text-sm text-gray-700 transition-colors hover:bg-pink-50 hover:text-pink-600 ${
+                opt === value ? 'bg-pink-50/70 font-semibold text-pink-600' : ''
               }`}
             >
               {opt}

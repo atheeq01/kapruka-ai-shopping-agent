@@ -7,6 +7,14 @@
     height: 100%;
   }
 
+  /* This is a light-only product. Pin the colour scheme so OS/browser dark mode
+     can't recolour native widgets (date picker, scrollbars) or — most visibly —
+     the Google Places predictions dropdown, which otherwise rendered on a
+     near-black surface with unreadable dark text. */
+  :root {
+    color-scheme: light;
+  }
+
   body {
     @apply antialiased;
     font-family: 'Inter', 'Noto Sans Tamil', 'Noto Sans Sinhala', sans-serif;
@@ -201,21 +209,35 @@
      normal white surface with our border + dark text so it matches every other
      field in the checkout form. */
   gmp-place-autocomplete {
-    --gmpx-color-surface: #ffffff;
-    --gmpx-color-on-surface: #1a1a2e;
-    --gmpx-color-on-surface-variant: #6b7280;
+    /* Theme via the Places UI Kit `--gmp-mat-*` tokens. The old `--gmpx-*`
+       prefix belongs to the Extended Component Library and was silently ignored
+       by this core element, which is why the predictions list stayed unthemed. */
+    color-scheme: light;
+    --gmp-mat-color-surface: #ffffff;            /* dropdown + input surface  */
+    --gmp-mat-color-on-surface: #1a1a2e;         /* primary prediction text   */
+    --gmp-mat-color-on-surface-variant: #6b7280; /* secondary prediction text */
+    --gmp-mat-color-outline-decorative: #ffe0ef; /* row dividers / hairlines  */
     width: 100%;
     background: #ffffff;
     border: 1px solid #ffe0ef;            /* primary-100 */
     border-radius: 0.75rem;
     color: #1a1a2e;
-    overflow: hidden;
+    /* NOTE: must stay `visible` — the predictions list renders inside the host
+       and `overflow: hidden` clips it, making the suggestions dropdown vanish.
+       Rounded corners are handled by the input's own border-radius below. */
+    overflow: visible;
   }
   gmp-place-autocomplete::part(input),
   gmp-place-autocomplete input {
     background: #ffffff !important;
     color: #1a1a2e !important;
     border-radius: 0.75rem;
+  }
+  /* Make the predictions dropdown float above sibling fields and the map pin
+     button, and give it a soft surface that matches the pink checkout theme. */
+  gmp-place-autocomplete::part(prediction-list),
+  .pac-container {
+    z-index: 10000 !important;
   }
 
   /* ── Pink send button ───── */
@@ -248,6 +270,19 @@
     background-size: 200% auto;
     animation: shimmer 2s linear infinite;
   }
+
+  /* ── Searchable-select dropdown scrollbar (thin, theme-pink) ───── */
+  .searchable-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: #fbcfe8 transparent;   /* pink-200 thumb */
+  }
+  .searchable-scroll::-webkit-scrollbar { width: 6px; }
+  .searchable-scroll::-webkit-scrollbar-track { background: transparent; }
+  .searchable-scroll::-webkit-scrollbar-thumb {
+    background: #fbcfe8;
+    border-radius: 9999px;
+  }
+  .searchable-scroll::-webkit-scrollbar-thumb:hover { background: #f9a8d4; }
 
   /* ── Scrollbar hide ───── */
   .scrollbar-hide {
