@@ -57,7 +57,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
   }
 
   return (
-    <div className="input-bar w-full px-2 py-2 flex items-end gap-2 rounded-3xl shadow-sm bg-white/90 backdrop-blur-md">
+    <div className="input-bar w-full px-6 py-2 flex items-end gap-2 rounded-3xl shadow-sm bg-white/90 backdrop-blur-md">
       <textarea
         ref={textareaRef}
         autoFocus={autoFocus}

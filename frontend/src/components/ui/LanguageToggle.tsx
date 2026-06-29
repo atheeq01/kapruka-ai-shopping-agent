@@ -12,8 +12,8 @@ interface Option {
 const OPTIONS: Option[] = [
   { value: 'AUTO', label: 'Auto', title: 'Auto-detect & mirror your language' },
   { value: 'EN', label: 'EN', title: 'Reply in English' },
-  { value: 'SI', label: 'සිං', title: 'Reply in Sinhala — සිංහලෙන් පිළිතුරු' },
-  { value: 'TA', label: 'தமி', title: 'Reply in Tamil — தமிழில் பதில்' },
+  { value: 'SI', label: 'SI|සිං', title: 'Reply in Sinhala — සිංහලෙන් පිළිතුරු' },
+  { value: 'TA', label: 'TA|தமி', title: 'Reply in Tamil — தமிழில் பதில்' },
 ];
 
 /**
