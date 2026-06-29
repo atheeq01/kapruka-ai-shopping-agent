@@ -54,7 +54,7 @@ export function useProductSelection(product: NormalizedProduct) {
     ? variants.find((v) => v.label === size) ?? firstAvailable
     : undefined;
 
-  const price = activeVariant?.price ?? product.price;
+  const price = activeVariant?.price || product.price;
   const inStock = activeVariant ? activeVariant.inStock : product.inStock;
 
   const trimmedIcing = icing.trim();
