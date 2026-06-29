@@ -100,6 +100,21 @@ def test_price_amount_handles_string_and_nested():
     assert _price_amount("free") == 0.0
 
 
+def test_price_from_html_meta_jsonld_and_visible():
+    from app.services.products import _price_from_html
+    # JSON-LD offers price (preferred)
+    assert _price_from_html('{"@type":"Product","offers":{"price":"6880"}}') == 6880
+    # product:price:amount meta tag
+    assert _price_from_html(
+        '<meta property="product:price:amount" content="6880" />'
+    ) == 6880
+    # Visible text — main price comes before installment lines
+    html = "<h2>RS.6,880</h2> ... <span>RS. 2,293 per month</span>"
+    assert _price_from_html(html) == 6880
+    # Nothing parseable
+    assert _price_from_html("<p>no price here</p>") == 0.0
+
+
 # ── Product detail parsing ───────────────────────────────────────────────────
 
 def test_parse_product_detail_json_unwraps_product_key():
