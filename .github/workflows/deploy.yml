@@ -173,18 +173,34 @@ jobs:
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Resolve backend URL from Cloud Run (or override)
+      - name: Resolve backend URL (GitHub secret → Secret Manager → Cloud Run)
         run: |
+          # Priority 1 — explicit GitHub secret override (fastest, no GCP call needed)
           if [ -n "${{ secrets.VITE_API_BASE_URL }}" ]; then
             echo "VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }}" >> "$GITHUB_ENV"
+            echo "::notice::Backend URL sourced from GitHub secret VITE_API_BASE_URL"
+
+          # Priority 2 — GCP Secret Manager (set once, survives secret rotation)
+          # To use: gcloud secrets create VITE_API_BASE_URL --data-file=- <<< "https://your-url"
           else
-            URL=$(gcloud run services describe "${{ vars.CLOUD_RUN_SERVICE }}" \
-              --region "${{ vars.GCP_REGION }}" --format='value(status.url)')
-            if [ -z "$URL" ]; then
-              echo "::error::Could not resolve Cloud Run URL for ${{ vars.CLOUD_RUN_SERVICE }}. Deploy the backend once first."
-              exit 1
+            SM_URL=$(gcloud secrets versions access latest \
+              --secret="VITE_API_BASE_URL" \
+              --project="${{ secrets.GCP_PROJECT_ID }}" 2>/dev/null || true)
+            if [ -n "$SM_URL" ]; then
+              echo "VITE_API_BASE_URL=$SM_URL" >> "$GITHUB_ENV"
+              echo "::notice::Backend URL sourced from Secret Manager (VITE_API_BASE_URL)"
+
+            # Priority 3 — auto-discover from Cloud Run (zero-config default)
+            else
+              URL=$(gcloud run services describe "${{ vars.CLOUD_RUN_SERVICE }}" \
+                --region "${{ vars.GCP_REGION }}" --format='value(status.url)')
+              if [ -z "$URL" ]; then
+                echo "::error::Could not resolve Cloud Run URL for ${{ vars.CLOUD_RUN_SERVICE }}. Deploy the backend first, or set the VITE_API_BASE_URL secret."
+                exit 1
+              fi
+              echo "VITE_API_BASE_URL=$URL" >> "$GITHUB_ENV"
+              echo "::notice::Backend URL auto-discovered from Cloud Run: $URL"
             fi
-            echo "VITE_API_BASE_URL=$URL" >> "$GITHUB_ENV"
           fi
 
       - uses: actions/setup-node@v4
