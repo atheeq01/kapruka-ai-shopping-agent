@@ -98,6 +98,14 @@ function stripMarkdown(text: string): string {
 
 
 
+const API_BASE =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || 'http://localhost:8000';
+
+// Silent 1-sample WAV used to unlock HTMLAudioElement on iOS Safari.
+// The play() call must succeed synchronously within a user gesture; a blank
+// data URI achieves this without a network round-trip.
+const SILENT_WAV = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+
 const MessageActions: React.FC<{ content: string; lang?: string }> = ({ content }) => {
   const [copied,  setCopied]  = useState(false);
   const [liked,   setLiked]   = useState(false);
@@ -106,17 +114,24 @@ const MessageActions: React.FC<{ content: string; lang?: string }> = ({ content 
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  // Revoke the blob URL when it's replaced or on unmount — separate from the
+  // audio pause so this cleanup doesn't fire while play() is still pending.
+  useEffect(() => {
+    return () => { if (audioUrl) URL.revokeObjectURL(audioUrl); };
+  }, [audioUrl]);
+
+  // Pause audio only on unmount, not every time audioUrl changes.
+  // Putting pause() in the [audioUrl] cleanup caused AbortError: when
+  // setAudioUrl() fires after the fetch, the cleanup ran during the
+  // play() Promise and paused the element mid-flight.
   useEffect(() => {
     return () => {
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current = null;
       }
-      if (audioUrl) {
-        URL.revokeObjectURL(audioUrl);
-      }
     };
-  }, [audioUrl]);
+  }, []);
 
   const handleCopy = async () => {
     try {
@@ -141,39 +156,56 @@ const MessageActions: React.FC<{ content: string; lang?: string }> = ({ content 
     const plain = stripMarkdown(content);
     if (!plain) return;
 
-    try {
-      if (!audioRef.current) {
-        // Unlock audio context for iOS Safari synchronously during user interaction
-        // Must use a valid playable media string (1-sample silent WAV) so play() succeeds and unlocks the element.
-        const silentWav = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
-        const audio = new Audio(silentWav);
-        audio.play().then(() => { audio.pause(); }).catch(() => {});
-        audioRef.current = audio;
+    // Synchronously unlock the audio element within the user gesture BEFORE any
+    // await. iOS Safari blocks .play() after an async boundary unless the same
+    // element was already unlocked here. We call play() then immediately pause()
+    // so no audible sound plays; the resulting AbortError is expected and caught.
+    if (!audioRef.current) {
+      const audio = new Audio(SILENT_WAV);
+      const unlockPlay = audio.play();
+      audio.pause();
+      unlockPlay.catch(() => {});
+      audioRef.current = audio;
+    } else {
+      audioRef.current.currentTime = 0;
+    }
 
-        let url = audioUrl;
-        if (!url) {
-          setLoading(true);
-          const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/chat/tts`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: plain })
-          });
-          if (!res.ok) throw new Error('TTS failed');
-          const blob = await res.blob();
-          url = URL.createObjectURL(blob);
-          setAudioUrl(url);
-          setLoading(false);
-        }
-        audioRef.current.src = url;
-        audioRef.current.onended = () => setSpeaking(false);
-        audioRef.current.onerror = () => setSpeaking(false);
+    try {
+      let url = audioUrl;
+      if (!url) {
+        setLoading(true);
+        const res = await fetch(`${API_BASE}/api/chat/tts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: plain }),
+        });
+        if (!res.ok) throw new Error(`TTS ${res.status}`);
+        const blob = await res.blob();
+        url = URL.createObjectURL(blob);
+        setAudioUrl(url);
+        setLoading(false);
       }
+
+      const audio = audioRef.current;
+      audio.src = url;
+      // Do NOT call audio.load() — setting src already triggers an implicit load.
+      // An explicit load() call aborts that load mid-flight and causes play() to
+      // throw AbortError.
+      audio.onended = () => {
+        setSpeaking(false);
+        audio.currentTime = 0;
+      };
+      audio.onerror = () => {
+        setSpeaking(false);
+        audio.currentTime = 0;
+      };
       setSpeaking(true);
-      await audioRef.current.play();
+      await audio.play();
     } catch (e) {
-      console.error(e);
+      console.error('[TTS]', e);
       setLoading(false);
       setSpeaking(false);
+      audioRef.current = null;
     }
   };
 
