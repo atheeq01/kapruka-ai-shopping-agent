@@ -144,9 +144,10 @@ const MessageActions: React.FC<{ content: string; lang?: string }> = ({ content 
     try {
       if (!audioRef.current) {
         // Unlock audio context for iOS Safari synchronously during user interaction
-        const audio = new Audio();
-        // Play an empty buffer or silence (will fail if no src, which is fine, it unlocks the context)
-        audio.play().catch(() => {});
+        // Must use a valid playable media string (1-sample silent WAV) so play() succeeds and unlocks the element.
+        const silentWav = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+        const audio = new Audio(silentWav);
+        audio.play().then(() => { audio.pause(); }).catch(() => {});
         audioRef.current = audio;
 
         let url = audioUrl;

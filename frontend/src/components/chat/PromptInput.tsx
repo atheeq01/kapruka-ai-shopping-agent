@@ -68,7 +68,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
         rows={1}
         className={cn(
           'w-full bg-transparent border-none focus:outline-none text-[#1a1a2e] placeholder:text-gray-400 resize-none leading-relaxed py-2',
-          isLg ? 'text-base' : 'text-sm',
+          isLg ? 'text-base md:text-lg' : 'text-base md:text-sm',
         )}
         style={{ minHeight: '36px' }}
       />
