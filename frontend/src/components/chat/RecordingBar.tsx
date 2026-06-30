@@ -80,6 +80,7 @@ export const RecordingBar: React.FC<RecordingBarProps> = ({ onCancel, onSend }) 
         }, 1000);
       } catch (err) {
         console.error('[RecordingBar] mic error:', err);
+        alert('Microphone access denied or not available. (HTTPS is required for microphone access on mobile devices).');
         if (mounted) onCancel();
       }
     })();
