@@ -143,6 +143,12 @@ const MessageActions: React.FC<{ content: string; lang?: string }> = ({ content 
 
     try {
       if (!audioRef.current) {
+        // Unlock audio context for iOS Safari synchronously during user interaction
+        const audio = new Audio();
+        // Play an empty buffer or silence (will fail if no src, which is fine, it unlocks the context)
+        audio.play().catch(() => {});
+        audioRef.current = audio;
+
         let url = audioUrl;
         if (!url) {
           setLoading(true);
@@ -157,7 +163,7 @@ const MessageActions: React.FC<{ content: string; lang?: string }> = ({ content 
           setAudioUrl(url);
           setLoading(false);
         }
-        audioRef.current = new Audio(url!);
+        audioRef.current.src = url;
         audioRef.current.onended = () => setSpeaking(false);
         audioRef.current.onerror = () => setSpeaking(false);
       }
@@ -171,7 +177,7 @@ const MessageActions: React.FC<{ content: string; lang?: string }> = ({ content 
   };
 
   return (
-    <div className="flex items-center gap-1 mt-1.5 opacity-100 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+    <div className="flex items-center gap-1 mt-1.5 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity duration-200">
       <ActionBtn onClick={handleCopy} title="Copy">
         {copied ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
       </ActionBtn>

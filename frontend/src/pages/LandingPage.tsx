@@ -8,6 +8,8 @@ import { PromptInput } from '../components/chat/PromptInput';
 import { useAppStore } from '../store/cartStore';
 import { sendAgentMessage, sendVoiceMessage } from '../lib/agentStream';
 import { LanguageToggle } from '../components/ui/LanguageToggle';
+import { MobileDrawer } from '../components/layout/MobileDrawer';
+import { Menu } from 'lucide-react';
 
 const QUICK_ACTIONS = [
   { label: 'Flowers for her', icon: '💐' },
@@ -84,8 +86,10 @@ export const LandingPage: React.FC = () => {
     sendAgentMessage(id, text);
   };
 
+  const [isDrawerOpen, setIsDrawerOpen] = React.useState(false);
+
   return (
-    <div className="flex h-screen overflow-hidden bg-app relative">
+    <div className="flex h-[100dvh] overflow-hidden bg-app relative">
       {/* Background blobs */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute -top-32 -left-24 h-[520px] w-[520px] rounded-full bg-pink-300/15 blur-3xl animate-blob" />
@@ -100,23 +104,35 @@ export const LandingPage: React.FC = () => {
       </div>
       <div className="absolute inset-0 pointer-events-none glow-bg" />
 
-      {/* Sidebar */}
-      <Sidebar />
+      {/* Sidebar - Desktop/Tablet Only */}
+      <div className="hidden md:flex h-full">
+        <Sidebar />
+      </div>
+
+      <MobileDrawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} />
 
       {/* Main content */}
       <div className="flex-1 flex flex-col h-full overflow-hidden relative z-10 min-w-0">
         {/* Header */}
-        <header className="flex items-center justify-end gap-3 px-6 md:px-10 py-4">
-          {/* Language toggle (Sinhala visible up front) */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5 }}
+        <header className="flex items-center justify-between px-4 md:px-10 py-4">
+          <button
+            onClick={() => setIsDrawerOpen(true)}
+            className="md:hidden w-10 h-10 flex items-center justify-center text-gray-500 hover:text-gray-800 transition-colors shrink-0"
           >
-            <LanguageToggle />
-          </motion.div>
-          {/* Cart button */}
-          <motion.button
+            <Menu size={22} />
+          </button>
+          
+          <div className="flex items-center gap-3 ml-auto">
+            {/* Language toggle (Sinhala visible up front) */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.5 }}
+            >
+              <LanguageToggle />
+            </motion.div>
+            {/* Cart button */}
+            <motion.button
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5 }}
@@ -131,10 +147,11 @@ export const LandingPage: React.FC = () => {
               </span>
             )}
           </motion.button>
+          </div>
         </header>
 
         {/* Hero */}
-        <main className="flex-1 flex flex-col items-center justify-center px-6 -mt-4 overflow-hidden">
+        <main className="flex-1 flex flex-col items-center justify-center px-4 md:px-6 -mt-4 overflow-y-auto pb-[env(safe-area-inset-bottom)] sm:pb-0">
 
           <motion.div
             initial={{ opacity: 0, y: 28 }}
@@ -169,7 +186,7 @@ export const LandingPage: React.FC = () => {
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.3 }}
-            className="flex flex-wrap items-center justify-center gap-2 mb-5"
+            className="hidden md:flex min-h-[700px]:flex flex-wrap items-center justify-center gap-2 mb-5"
           >
             {QUICK_ACTIONS.map((action, i) => (
               <motion.button
@@ -191,7 +208,7 @@ export const LandingPage: React.FC = () => {
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.5 }}
-            className="flex flex-wrap items-center justify-center gap-2 mb-6"
+            className="hidden md:flex min-h-[700px]:flex flex-wrap items-center justify-center gap-2 mb-6"
           >
             <span className="text-[11px] font-semibold text-violet-400 self-center mr-0.5">සිංහලෙන්:</span>
             {SINHALA_ACTIONS.map((action, i) => (
