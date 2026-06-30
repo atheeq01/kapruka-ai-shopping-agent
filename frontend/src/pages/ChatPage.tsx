@@ -67,7 +67,7 @@ export const ChatPage: React.FC = () => {
   );
 
   return (
-    <div className="flex h-screen overflow-hidden bg-app relative">
+    <div className="flex h-[100dvh] overflow-hidden bg-app relative">
       {/* Ambient blobs */}
       {AmbientBlobs}
 
