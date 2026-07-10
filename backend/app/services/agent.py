@@ -252,8 +252,14 @@ def _local_cart_tool() -> types.Tool:
     ])
 
 
-def _normalize_cart_items(args: dict) -> list[dict]:
-    """Validate + normalise add_to_cart arguments into clean cart items."""
+def _normalize_cart_items(args: dict, products_seen: Optional[dict[str, dict]] = None) -> list[dict]:
+    """Validate + normalise add_to_cart arguments into clean cart items.
+
+    `products_seen` (product_id -> parsed product dict from a search/detail
+    result earlier THIS request) backfills `image` — and `price` if the model
+    left it out — since the model's tool-call args can't be trusted to always
+    include the optional image URL.
+    """
     flat = _flatten_args(args)
     raw = flat.get("items")
     if isinstance(raw, dict):
@@ -281,6 +287,17 @@ def _normalize_cart_items(args: dict) -> list[dict]:
         for k in ("size", "image", "icing_text"):
             if it.get(k):
                 item[k] = str(it[k])
+
+        seen = (products_seen or {}).get(pid)
+        if seen:
+            if not item.get("image") and seen.get("image"):
+                item["image"] = seen["image"]
+            if item.get("price") is None and seen.get("price") is not None:
+                try:
+                    item["price"] = float(seen["price"])
+                except (TypeError, ValueError):
+                    pass
+
         items.append(item)
     return items
 
@@ -420,6 +437,15 @@ async def process_chat(
     mcp_stack = AsyncExitStack()
     mcp_session: Optional[ClientSession] = None
 
+    # Products the agent has actually looked up (via search / get_product) THIS
+    # request, keyed by id. The add_to_cart tool asks the model to also pass an
+    # "image" URL, but that's an optional free-text field the model frequently
+    # drops — so we backfill it (and price, if missing) from here instead of
+    # trusting the model to echo it correctly. Fixes chat-added items missing a
+    # photo while button-added items (read straight from the fetched product)
+    # never do.
+    products_seen: dict[str, dict] = {}
+
     async def _get_mcp_session() -> ClientSession:
         nonlocal mcp_session
         if mcp_session is None:
@@ -482,6 +508,15 @@ async def process_chat(
             yield _sse({"type": "error", "content": f"Gemini API unavailable after {MAX_RETRIES} retries. Please try again shortly."})
             return
 
+        # Safety net: the model occasionally "narrates" a tool call as literal text
+        # (e.g. types out "[show_checkout_form]" instead of actually invoking the
+        # function) — a hallucinated-tool-call failure mode. When that happens the
+        # customer sees the tool name as dead text and never gets the checkout form.
+        # Detect it and still show the form, since it never costs anything to show.
+        if not any(fc.name == SHOW_CHECKOUT_FORM_TOOL for fc in function_calls):
+            if "show_checkout_form" in model_text.lower():
+                yield _sse({"type": "checkout_form"})
+
         if not function_calls:
             break
 
@@ -522,7 +557,7 @@ async def process_chat(
 
             # ── Local cart tool: handled here, never sent to MCP ────────────────
             if fc.name == ADD_TO_CART_TOOL:
-                items = _normalize_cart_items(args)
+                items = _normalize_cart_items(args, products_seen)
                 if items:
                     yield _sse({"type": "cart_add", "items": items})
                     added = ", ".join(f"{i['quantity']}× {i['name']}" for i in items)
@@ -568,6 +603,11 @@ async def process_chat(
                             parsed = await enrich_products(md)
 
                     if parsed:
+                        for p in parsed:
+                            pid = str(p.get("id") or "").strip()
+                            if pid:
+                                products_seen[pid] = p
+
                         # ── Relevance guard (Task 1) ────────────────────────────
                         # Enforce category + gender consistency BEFORE rendering, so
                         # we never show a grid that contradicts the request (e.g.
@@ -606,6 +646,9 @@ async def process_chat(
                     if detail:
                         if not detail.get("price"):
                             await enrich_products([detail])
+                        pid = str(detail.get("id") or "").strip()
+                        if pid:
+                            products_seen[pid] = detail
                         yield _sse({"type": "product_detail", "item": detail})
                 except Exception as e:
                     print(f"[agent] product detail parse failed: {e}")
