@@ -133,7 +133,15 @@ export const useAppStore = create<AppState>()(
             return {
               cart: state.cart.map((c) =>
                 c.product_id === item.product_id
-                  ? { ...c, quantity: c.quantity + (item.quantity || 1) }
+                  ? {
+                      ...c,
+                      quantity: c.quantity + (item.quantity || 1),
+                      // Heal display fields an earlier add left empty (e.g. a
+                      // chat-added item whose image arrived without a URL).
+                      name: c.name ?? item.name,
+                      price: c.price ?? item.price,
+                      image: c.image ?? item.image,
+                    }
                   : c,
               ),
             };

@@ -1,5 +1,6 @@
 import { useAppStore } from '../store/cartStore';
 import type { AgentStep } from '../store/cartStore';
+import { normalizeProduct } from './normalizeProduct';
 
 const API_BASE =
   (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || 'http://localhost:8000';
@@ -14,6 +15,36 @@ const uid = () =>
   typeof crypto !== 'undefined' && crypto.randomUUID
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random()}`;
+
+/**
+ * Find a product by id among everything shown in this conversation — the
+ * in-flight stream's products (`extra`) plus every prior message's search
+ * grids and detail cards. Prefers a match that actually carries an image.
+ */
+function findProductInConversation(
+  conversationId: string,
+  productId: string,
+  extra: unknown[] = [],
+): ReturnType<typeof normalizeProduct> | undefined {
+  const candidates: unknown[] = [...extra];
+  const convo = useAppStore.getState().conversations[conversationId];
+  // Walk newest-first so the most recently shown version of the product wins.
+  const messages = convo?.messages ?? [];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.productDetail) candidates.push(m.productDetail);
+    if (Array.isArray(m.products)) candidates.push(...m.products);
+  }
+  let fallback: ReturnType<typeof normalizeProduct> | undefined;
+  for (const raw of candidates) {
+    if (!raw || typeof raw !== 'object') continue;
+    const p = normalizeProduct(raw);
+    if (p.id !== productId) continue;
+    if (p.image) return p;
+    fallback = fallback ?? p;
+  }
+  return fallback;
+}
 
 
 // ── Core SSE streaming ─────────────────────────────────────────────────────────
@@ -124,16 +155,35 @@ async function _streamIntoMessage(conversationId: string, botMsgId: string): Pro
             } else if (event.type === 'cart_add') {
               // Agent added item(s) to the cart on the customer's behalf
               // (e.g. "add the second one"). Apply to the React cart store.
+              // The backend can only backfill the image from products fetched in
+              // THIS request; when the customer references a product shown in an
+              // EARLIER message, `it.image` often arrives empty. The conversation
+              // already holds every product card we've rendered, so look the
+              // image (and price) up there by product_id.
               if (Array.isArray(event.items)) {
                 const { addToCart } = useAppStore.getState();
                 for (const it of event.items) {
                   if (!it?.product_id || !it?.name) continue;
+                  const pid = String(it.product_id);
+                  let image: string | undefined = it.image || undefined;
+                  let price: number | undefined =
+                    typeof it.price === 'number' ? it.price : undefined;
+                  if (!image || price == null) {
+                    const seen = findProductInConversation(conversationId, pid, [
+                      ...currentProducts,
+                      ...(currentProductDetail ? [currentProductDetail] : []),
+                    ]);
+                    if (seen) {
+                      image = image || seen.image;
+                      price = price ?? (seen.price > 0 ? seen.price : undefined);
+                    }
+                  }
                   addToCart({
-                    product_id: String(it.product_id),
+                    product_id: pid,
                     quantity: Number(it.quantity) || 1,
                     name: it.name,
-                    price: typeof it.price === 'number' ? it.price : undefined,
-                    image: it.image,
+                    price,
+                    image,
                     size: it.size,
                     icing_text: it.icing_text,
                   });
